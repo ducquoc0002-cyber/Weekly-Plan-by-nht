@@ -222,9 +222,10 @@
             transition: background-size 0.2s ease-in-out, opacity 0.2s ease-in-out, color 0.2s ease-in-out;
         }
 
-        .time-input-wrapper { display: flex; align-items: center; gap: 4px; margin-top: -2px; transition: opacity 0.2s ease-in-out; }
-        .t-time-part { width: 35px; border: none; background: transparent; font-family: inherit; font-size: 9.5px; font-weight: 600; color: #000; outline: none; text-align: center; cursor: text; }
-        .time-separator { font-size: 9.5px; color: #000; font-weight: 600; }
+        .time-input-wrapper { display: flex; align-items: center; gap: 2px; margin-top: -2px; transition: opacity 0.2s ease-in-out; }
+        .t-time-part { width: 16px; border: none; background: transparent; font-family: inherit; font-size: 9.5px; font-weight: 600; color: #000; outline: none; text-align: center; cursor: text; padding: 0; }
+        .time-separator { font-size: 9.5px; color: #000; font-weight: 600; margin: 0 4px; }
+        .time-colon { font-size: 9.5px; color: #000; font-weight: 800; margin: 0 -1px; }
 
         .task-item.checked .t-name, .task-item.checked .time-input-wrapper { opacity: 0.4; }
         .task-item.checked .t-name { background-size: 100% 100%; }
@@ -871,6 +872,36 @@
             container.innerHTML = html;
         }
 
+        function formatTimeInput(el) {
+            let val = el.value.trim().replace(/\D/g, '');
+            if (val.length === 1) val = '0' + val;
+            el.value = val;
+        }
+
+        function focusTimeInput(d, t, idx) {
+            const types = ['h_start', 'm_start', 'h_end', 'm_end'];
+            const el = document.getElementById(`t_${types[idx]}_${d}_${t}`);
+            if (el) {
+                el.focus();
+                el.select();
+            }
+        }
+
+        function handleTimeNavigation(e, dIdx, tIdx, currentIdx) {
+            const keysRight = ['ArrowRight', 'd', 'D'];
+            const keysLeft = ['ArrowLeft', 'a', 'A'];
+            
+            if (keysRight.includes(e.key)) {
+                e.preventDefault();
+                let nextIdx = currentIdx + 1;
+                if (nextIdx <= 3) focusTimeInput(dIdx, tIdx, nextIdx);
+            } else if (keysLeft.includes(e.key)) {
+                e.preventDefault();
+                let prevIdx = currentIdx - 1;
+                if (prevIdx >= 0) focusTimeInput(dIdx, tIdx, prevIdx);
+            }
+        }
+
         function renderDays() {
             const mainContainer = document.getElementById('main-grid');
             let allDaysHtml = '';
@@ -888,9 +919,13 @@
                             <div class="task-input-container">
                                 <input type="text" id="t_name_${dIdx}_${t}" class="t-name" placeholder="" onchange="updateDayAndSave(${dIdx})">
                                 <div class="time-input-wrapper">
-                                    <input type="text" id="t_time_start_${dIdx}_${t}" class="t-time-part" placeholder="--" onchange="updateDayAndSave(${dIdx})">
+                                    <input type="text" id="t_h_start_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 0)">
+                                    <span class="time-colon">:</span>
+                                    <input type="text" id="t_m_start_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 1)">
                                     <span class="time-separator">-</span>
-                                    <input type="text" id="t_time_end_${dIdx}_${t}" class="t-time-part" placeholder="--" onchange="updateDayAndSave(${dIdx})">
+                                    <input type="text" id="t_h_end_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 2)">
+                                    <span class="time-colon">:</span>
+                                    <input type="text" id="t_m_end_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 3)">
                                 </div>
                             </div>
                             <span class="delay-badge" id="delay_badge_${dIdx}_${t}" style="display:none;" title=""></span>
@@ -944,8 +979,10 @@
             if (sourceDay === targetDayIdx) { draggedTaskInfo = null; return; }
 
             const sInp = document.getElementById(`t_name_${sourceDay}_${sourceTask}`);
-            const sTimeStart = document.getElementById(`t_time_start_${sourceDay}_${sourceTask}`);
-            const sTimeEnd = document.getElementById(`t_time_end_${sourceDay}_${sourceTask}`);
+            const sHStart = document.getElementById(`t_h_start_${sourceDay}_${sourceTask}`);
+            const sMStart = document.getElementById(`t_m_start_${sourceDay}_${sourceTask}`);
+            const sHEnd = document.getElementById(`t_h_end_${sourceDay}_${sourceTask}`);
+            const sMEnd = document.getElementById(`t_m_end_${sourceDay}_${sourceTask}`);
             const sCb = document.getElementById(`t_check_${sourceDay}_${sourceTask}`);
             const sDiv = document.getElementById(`task_div_${sourceDay}_${sourceTask}`);
             const priority = sDiv.getAttribute('data-priority');
@@ -958,13 +995,16 @@
 
             if (emptyTargetTaskIdx !== -1) {
                 document.getElementById(`t_name_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sInp.value;
-                document.getElementById(`t_time_start_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sTimeStart.value;
-                document.getElementById(`t_time_end_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sTimeEnd.value;
+                document.getElementById(`t_h_start_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sHStart.value;
+                document.getElementById(`t_m_start_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sMStart.value;
+                document.getElementById(`t_h_end_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sHEnd.value;
+                document.getElementById(`t_m_end_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sMEnd.value;
                 document.getElementById(`t_check_${targetDayIdx}_${emptyTargetTaskIdx}`).checked = sCb.checked;
                 document.getElementById(`task_div_${targetDayIdx}_${emptyTargetTaskIdx}`).setAttribute('data-priority', priority);
                 document.getElementById(`task_div_${targetDayIdx}_${emptyTargetTaskIdx}`).setAttribute('data-delay', delay);
 
-                sInp.value = ""; sTimeStart.value = ""; sTimeEnd.value = ""; sCb.checked = false; sDiv.setAttribute('data-priority', "3"); sDiv.setAttribute('data-delay', "0");
+                sInp.value = ""; sHStart.value = ""; sMStart.value = ""; sHEnd.value = ""; sMEnd.value = ""; 
+                sCb.checked = false; sDiv.setAttribute('data-priority', "3"); sDiv.setAttribute('data-delay', "0");
 
                 saveData(); updateDay(sourceDay); updateDay(targetDayIdx); updateWeeklySummary(); drawWaveChart();
                 sortTasks(targetDayIdx); sortTasks(sourceDay);
@@ -989,32 +1029,42 @@
 
             if (sPri === tPri) {
                 const sInp = document.getElementById(`t_name_${sDay}_${sTask}`);
-                const sTimeStart = document.getElementById(`t_time_start_${sDay}_${sTask}`);
-                const sTimeEnd = document.getElementById(`t_time_end_${sDay}_${sTask}`);
+                const sHStart = document.getElementById(`t_h_start_${sDay}_${sTask}`);
+                const sMStart = document.getElementById(`t_m_start_${sDay}_${sTask}`);
+                const sHEnd = document.getElementById(`t_h_end_${sDay}_${sTask}`);
+                const sMEnd = document.getElementById(`t_m_end_${sDay}_${sTask}`);
                 const sCb = document.getElementById(`t_check_${sDay}_${sTask}`);
                 const sDelay = sDiv.getAttribute('data-delay');
 
                 const tInp = document.getElementById(`t_name_${targetDayIdx}_${targetTaskIdx}`);
-                const tTimeStart = document.getElementById(`t_time_start_${targetDayIdx}_${targetTaskIdx}`);
-                const tTimeEnd = document.getElementById(`t_time_end_${targetDayIdx}_${targetTaskIdx}`);
+                const tHStart = document.getElementById(`t_h_start_${targetDayIdx}_${targetTaskIdx}`);
+                const tMStart = document.getElementById(`t_m_start_${targetDayIdx}_${targetTaskIdx}`);
+                const tHEnd = document.getElementById(`t_h_end_${targetDayIdx}_${targetTaskIdx}`);
+                const tMEnd = document.getElementById(`t_m_end_${targetDayIdx}_${targetTaskIdx}`);
                 const tCb = document.getElementById(`t_check_${targetDayIdx}_${targetTaskIdx}`);
                 const tDelay = tDiv.getAttribute('data-delay');
 
                 const tempText = tInp.value;
-                const tempTimeStart = tTimeStart.value;
-                const tempTimeEnd = tTimeEnd.value;
+                const tempHStart = tHStart.value;
+                const tempMStart = tMStart.value;
+                const tempHEnd = tHEnd.value;
+                const tempMEnd = tMEnd.value;
                 const tempCb = tCb.checked;
                 const tempDelay = tDelay;
 
                 tInp.value = sInp.value;
-                tTimeStart.value = sTimeStart.value;
-                tTimeEnd.value = sTimeEnd.value;
+                tHStart.value = sHStart.value;
+                tMStart.value = sMStart.value;
+                tHEnd.value = sHEnd.value;
+                tMEnd.value = sMEnd.value;
                 tCb.checked = sCb.checked;
                 tDiv.setAttribute('data-delay', sDelay);
 
                 sInp.value = tempText;
-                sTimeStart.value = tempTimeStart;
-                sTimeEnd.value = tempTimeEnd;
+                sHStart.value = tempHStart;
+                sMStart.value = tempMStart;
+                sHEnd.value = tempHEnd;
+                sMEnd.value = tempMEnd;
                 sCb.checked = tempCb;
                 sDiv.setAttribute('data-delay', tempDelay);
 
@@ -1175,8 +1225,10 @@
             for(let d = 0; d < 7; d++) {
                 for(let t = 0; t < tasksPerDay; t++) {
                     wData.tasks[`t_name_${d}_${t}`] = document.getElementById(`t_name_${d}_${t}`).value;
-                    wData.tasks[`t_time_start_${d}_${t}`] = document.getElementById(`t_time_start_${d}_${t}`).value;
-                    wData.tasks[`t_time_end_${d}_${t}`] = document.getElementById(`t_time_end_${d}_${t}`).value;
+                    wData.tasks[`t_h_start_${d}_${t}`] = document.getElementById(`t_h_start_${d}_${t}`).value;
+                    wData.tasks[`t_m_start_${d}_${t}`] = document.getElementById(`t_m_start_${d}_${t}`).value;
+                    wData.tasks[`t_h_end_${d}_${t}`] = document.getElementById(`t_h_end_${d}_${t}`).value;
+                    wData.tasks[`t_m_end_${d}_${t}`] = document.getElementById(`t_m_end_${d}_${t}`).value;
                     wData.tasks[`t_check_${d}_${t}`] = document.getElementById(`t_check_${d}_${t}`).checked;
                     wData.tasks[`t_pri_${d}_${t}`] = document.getElementById(`task_div_${d}_${t}`).getAttribute('data-priority');
                     wData.tasks[`t_delay_${d}_${t}`] = document.getElementById(`task_div_${d}_${t}`).getAttribute('data-delay');
@@ -1200,8 +1252,10 @@
             for(let d = 0; d < 7; d++) {
                 for(let t = 0; t < tasksPerDay; t++) {
                     document.getElementById(`t_name_${d}_${t}`).value = wData.tasks[`t_name_${d}_${t}`] || "";
-                    document.getElementById(`t_time_start_${d}_${t}`).value = wData.tasks[`t_time_start_${d}_${t}`] || "";
-                    document.getElementById(`t_time_end_${d}_${t}`).value = wData.tasks[`t_time_end_${d}_${t}`] || "";
+                    document.getElementById(`t_h_start_${d}_${t}`).value = wData.tasks[`t_h_start_${d}_${t}`] || "";
+                    document.getElementById(`t_m_start_${d}_${t}`).value = wData.tasks[`t_m_start_${d}_${t}`] || "";
+                    document.getElementById(`t_h_end_${d}_${t}`).value = wData.tasks[`t_h_end_${d}_${t}`] || "";
+                    document.getElementById(`t_m_end_${d}_${t}`).value = wData.tasks[`t_m_end_${d}_${t}`] || "";
                     document.getElementById(`t_check_${d}_${t}`).checked = wData.tasks[`t_check_${d}_${t}`] || false;
                     document.getElementById(`task_div_${d}_${t}`).setAttribute('data-priority', wData.tasks[`t_pri_${d}_${t}`] || "3");
                     document.getElementById(`task_div_${d}_${t}`).setAttribute('data-delay', wData.tasks[`t_delay_${d}_${t}`] || "0");
