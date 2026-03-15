@@ -56,33 +56,49 @@
     <div class="dashboard-wrapper">
         <div class="grid-container" id="main-grid">
             
-            <div class="grid-item wave-chart-container">
-                <div class="wave-overview-wrapper">
-                    
-                    <div class="quote" style="font-family: 'Quicksand', sans-serif; font-weight: 800; font-size: 26px; text-align: center; color: var(--border-darker); width: 75%; margin: 0 auto 15px auto; letter-spacing: -1.5px; word-spacing: 5px; text-transform: uppercase; text-shadow: 1px 1px 0px rgba(255,255,255,0.8);">
-                        "Leave the past behind once more, just like you used to"
-                    </div>
+            <section class="grid-item wave-chart-container summary-header" aria-label="Weekly performance summary">
+                <div class="summary-header__inner">
+                    <header class="summary-header__quote">
+                        <p class="summary-header__quote-text">
+                            "Leave the past behind once more, just like you used to"
+                        </p>
+                    </header>
 
-                    <div class="wave-overview-content-wrapper">
-                        <div class="wave-overview-table">
-                            <div id="greeting-text" class="greeting-text" oncontextmenu="renameUser(event)" title="Right-click to rename">Hi Name !!</div>
-                            <div class="summary-header">Total Completed</div>
-                            <div class="summary-header">In Progress</div>
-                            <div class="summary-value completed-val" id="weekly-completed">0</div>
-                            <div class="summary-value progress-val" id="weekly-progress">0</div>
-                        </div>
-                        <div class="wave-overview-chart">
-                            <div class="wave-chart-inner">
+                    <div class="summary-header__body">
+                        <article class="summary-header__stats" aria-label="Weekly stats">
+                            <div
+                                id="greeting-text"
+                                class="summary-header__greeting greeting-text"
+                                oncontextmenu="renameUser(event)"
+                                title="Right-click to rename"
+                            >
+                                Hi Name !!
+                            </div>
+
+                            <div class="summary-header__stats-grid">
+                                <div class="summary-header__stats-item summary-header__stats-item--completed">
+                                    <span class="summary-header__stats-label">Total Completed</span>
+                                    <span class="summary-header__stats-value" id="weekly-completed">0</span>
+                                </div>
+                                <div class="summary-header__stats-item summary-header__stats-item--progress">
+                                    <span class="summary-header__stats-label">In Progress</span>
+                                    <span class="summary-header__stats-value" id="weekly-progress">0</span>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article class="summary-header__chart" aria-label="Weekly trend chart">
+                            <div class="summary-header__chart-inner">
                                 <svg class="wave-chart" viewBox="0 0 1000 90" preserveAspectRatio="none">
                                     <path id="wave-polygon" class="wave-line"></path>
                                     <path id="wave-path" fill="none" stroke="var(--stroke-orange)" stroke-width="3"></path>
                                     <g id="wave-points"></g>
                                 </svg>
                             </div>
-                        </div>
+                        </article>
                     </div>
                 </div>
-            </div>
+            </section>
 
             <div class="grid-item widget-area">
                 <div class="calendar-container">
