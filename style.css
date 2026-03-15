@@ -230,10 +230,10 @@ body {
 }
 
 .summary-header__chart {
-    background: var(--summary-soft-peach);
-    border-radius: 16px;
-    border: 1px solid var(--summary-border);
-    padding: 16px 18px 18px;
+    background: linear-gradient(135deg, rgba(251, 226, 207, 0.9), rgba(251, 226, 207, 0.7));
+    border-radius: 18px;
+    border: 1px solid rgba(139, 94, 60, 0.25);
+    padding: 14px 18px 16px;
     display: flex;
     align-items: flex-end;
 }
@@ -251,15 +251,26 @@ svg.wave-chart {
 }
 
 .wave-line {
-    fill: rgba(227, 167, 122, 0.25);
+    fill: rgba(227, 167, 122, 0.16);
     stroke: var(--stroke-orange);
-    stroke-width: 3;
+    stroke-width: 2.4;
     stroke-linejoin: round;
     stroke-linecap: round;
     transition: all 0.5s ease;
 }
-.wave-points circle { fill: #ffffff; stroke: var(--stroke-orange); stroke-width: 2.5; cursor: pointer; transition: r 0.2s ease; }
-.wave-points circle:hover { r: 6; }
+.wave-points circle {
+    fill: #fffdf9;
+    stroke: var(--stroke-orange);
+    stroke-width: 2;
+    r: 4;
+    cursor: pointer;
+    transition: r 0.18s ease, fill 0.18s ease, stroke-width 0.18s ease;
+}
+.wave-points circle:hover {
+    r: 5;
+    fill: #ffffff;
+    stroke-width: 2.2;
+}
 
 .chart-tooltip {
     position: absolute; display: none; background: var(--text-main); color: #ffffff; padding: 6px 10px;
