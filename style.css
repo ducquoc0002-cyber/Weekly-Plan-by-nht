@@ -230,7 +230,7 @@ body {
 }
 
 .summary-header__chart {
-    background: linear-gradient(135deg, rgba(251, 226, 207, 0.9), rgba(251, 226, 207, 0.7));
+    background: #ffffff;
     border-radius: 18px;
     border: 1px solid rgba(139, 94, 60, 0.25);
     padding: 14px 18px 16px;
