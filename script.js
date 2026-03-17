@@ -307,10 +307,10 @@ function renderCalendar() {
     let startDay = firstDay === 0 ? 6 : firstDay - 1;
 
     const calGrid = document.getElementById('cal-grid-days'); let html = '';
-    for(let i=0; i<startDay; i++) { html += `<div class="cal-date" style="cursor:default;"></div>`; }
+    for(let i=0; i<startDay; i++) { html += `<div class="cal-date"></div>`; }
     for(let i=1; i<=daysInMonth; i++) {
-        let isTodayClass = (i === today && isCurrentMonth && !isViewingNextWeek) ? 'today' : '';
-        html += `<div class="cal-date ${isTodayClass}" onclick="viewHistoricalDay(${year}, ${month}, ${i})">${i}</div>`;
+        if(i === today && isCurrentMonth && !isViewingNextWeek) { html += `<div class="cal-date today">${i}</div>`; } 
+        else { html += `<div class="cal-date">${i}</div>`; }
     }
     calGrid.innerHTML = html;
 }
@@ -904,61 +904,4 @@ function updateRowStatus(id) {
     row.classList.remove('status-achieved', 'status-pending');
     if(select.value === 'Achieved') row.classList.add('status-achieved');
     else if (select.value === 'Pending') row.classList.add('status-pending');
-}
-function viewHistoricalDay(y, m, d) {
-    const targetDate = new Date(y, m, d);
-    const targetMonday = getMonday(targetDate);
-    const weekId = formatDateKey(targetMonday);
-    
-    let dayIndex = targetDate.getDay();
-    dayIndex = dayIndex === 0 ? 6 : dayIndex - 1;
-    
-    document.getElementById('history-date-title').innerText = `${String(d).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}/${y}`;
-    const contentDiv = document.getElementById('history-content');
-    
-    if (!appData.weeks || !appData.weeks[weekId]) {
-        contentDiv.innerHTML = '<p style="text-align:center; color:#888; font-size:13px; margin-top: 20px;">No data recorded for this date.</p>';
-        document.getElementById('history-modal').style.display = 'flex';
-        return;
-    }
-    
-    const wData = appData.weeks[weekId];
-    let tasksHtml = '<h3 style="font-size:13px; text-transform:uppercase; color:var(--border-darker); border-bottom:2px dashed rgba(194, 139, 98, 0.4); padding-bottom:5px; margin-bottom:10px;">Tasks</h3><div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">';
-    let tasksFound = false;
-    
-    for(let t = 0; t < tasksPerDay; t++) {
-        const tName = wData.tasks[`t_name_${dayIndex}_${t}`];
-        const tCheck = wData.tasks[`t_check_${dayIndex}_${t}`];
-        if (tName && tName.trim() !== "") {
-            tasksFound = true;
-            const checkIcon = tCheck ? '✅' : '⬜';
-            const textStyle = tCheck ? 'text-decoration: line-through; opacity: 0.5;' : '';
-            tasksHtml += `<div style="display:flex; gap:10px; font-size:12px; font-weight:600; color:var(--text-main);"><span style="flex-shrink:0;">${checkIcon}</span> <span style="${textStyle}">${tName}</span></div>`;
-        }
-    }
-    if (!tasksFound) tasksHtml += '<div style="font-size:12px; color:#888; font-style: italic;">No tasks recorded.</div>';
-    tasksHtml += '</div>';
-
-    let habitsHtml = '<h3 style="font-size:13px; text-transform:uppercase; color:var(--border-darker); border-bottom:2px dashed rgba(194, 139, 98, 0.4); padding-bottom:5px; margin-bottom:10px;">Habits</h3><div style="display:flex; flex-direction:column; gap:8px;">';
-    let habitsFound = false;
-    
-    for(let h = 0; h < habitsCount; h++) {
-        const hName = wData.habits[`h_name_${h}`];
-        const hCheck = wData.habits[`h_check_${h}_${dayIndex}`];
-        if (hName && hName.trim() !== "") {
-            habitsFound = true;
-            const checkIcon = hCheck ? '✅' : '⬜';
-            const textStyle = hCheck ? 'opacity: 1;' : 'opacity: 0.5;';
-            habitsHtml += `<div style="display:flex; gap:10px; font-size:12px; font-weight:600; color:var(--text-main);"><span style="flex-shrink:0;">${checkIcon}</span> <span style="${textStyle}">${hName}</span></div>`;
-        }
-    }
-    if (!habitsFound) habitsHtml += '<div style="font-size:12px; color:#888; font-style: italic;">No habits recorded.</div>';
-    habitsHtml += '</div>';
-
-    contentDiv.innerHTML = tasksHtml + habitsHtml;
-    document.getElementById('history-modal').style.display = 'flex';
-}
-
-function closeHistoryModal() {
-    document.getElementById('history-modal').style.display = 'none';
 }
