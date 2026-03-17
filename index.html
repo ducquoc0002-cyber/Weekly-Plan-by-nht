@@ -230,5 +230,16 @@
     </div>
 
     <script src="script.js"></script>
-<script src="script.js"></script></body>
+<div id="history-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 420px; padding: 25px;">
+            <div class="modal-header" style="margin-bottom: 15px;">
+                <h2 style="margin:0; color:var(--text-main); font-weight:800; font-size: 18px;">📅 History: <span id="history-date-title"></span></h2>
+                <button class="modal-close" onclick="closeHistoryModal()">×</button>
+            </div>
+            <div id="history-content" style="max-height: 60vh; overflow-y: auto; padding-right: 5px;">
+                </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script></body>
 </html>
