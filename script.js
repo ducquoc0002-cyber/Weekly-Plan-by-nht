@@ -23,6 +23,8 @@ let weekDates = [];
 let currentRealWeekId = "";
 let viewingWeekId = "";
 let isViewingNextWeek = false;
+let currentMonthId = "";   // format: "YYYY-MM"
+let viewingMonthId = "";   // tháng đang xem trong Monthly Summary / Month Picker
 
 let appData = { weeks: {}, monthly: {}, abbrs: {} };
 let saveTimeout;
@@ -243,6 +245,8 @@ function calculateWeekIds() {
     const now = new Date();
     const thisMonday = getMonday(now);
     currentRealWeekId = formatDateKey(thisMonday);
+    currentMonthId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    viewingMonthId = currentMonthId;
 }
 
 function generateWeekDates(mondayStr) {
@@ -716,7 +720,15 @@ function closeNoteModal() { activeModalCount = Math.max(0, activeModalCount - 1)
 function openAbbrModal() { activeModalCount++; document.getElementById('abbr-modal').style.display = 'flex'; }
 function closeAbbrModal() { activeModalCount = Math.max(0, activeModalCount - 1); document.getElementById('abbr-modal').style.display = 'none'; }
 
-function openMonthlyModal() { activeModalCount++; document.getElementById('monthly-modal').style.display = 'flex'; loadMonthlyData(); }
+function openMonthlyModal() {
+    activeModalCount++;
+    // Đồng bộ viewingMonthId với tháng của tuần đang xem
+    const parts = viewingWeekId.split('-');
+    const vDate = new Date(parts[0], parts[1] - 1, parts[2]);
+    viewingMonthId = `${vDate.getFullYear()}-${String(vDate.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('monthly-modal').style.display = 'flex';
+    loadMonthlyData();
+}
 function closeMonthlyModal() { activeModalCount = Math.max(0, activeModalCount - 1); document.getElementById('monthly-modal').style.display = 'none'; }
 
 /**
