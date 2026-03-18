@@ -261,29 +261,7 @@ function generateWeekDates(mondayStr) {
 }
 
 function toggleWeekView() {
-    saveData(); 
-    isViewingNextWeek = !isViewingNextWeek;
-    
-    const btn = document.getElementById('nav-btn-schedule');
-    const title = document.getElementById('board-title');
-    
-    const parts = currentRealWeekId.split('-');
-    const thisMonday = new Date(parts[0], parts[1] - 1, parts[2]);
-    
-    if (isViewingNextWeek) {
-        const nextMonday = new Date(thisMonday);
-        nextMonday.setDate(thisMonday.getDate() + 7);
-        viewingWeekId = formatDateKey(nextMonday);
-        btn.classList.add('active-btn'); btn.innerText = "⬅ Back to Current"; title.innerText = "NEXT WEEK PLAN";
-    } else {
-        viewingWeekId = currentRealWeekId;
-        btn.classList.remove('active-btn'); btn.innerText = "📅 Plan Next Week"; title.innerText = "CURRENT WEEK";
-    }
-    
-    if(!appData.weeks[viewingWeekId]) { appData.weeks[viewingWeekId] = { tasks: {}, habits: {}, notes: {} }; }
-    
-    generateWeekDates(viewingWeekId);
-    rebuildUI();
+    // Kept as no-op for backward compatibility — replaced by Monthly Basis
 }
 
 function rebuildUI() {
@@ -741,9 +719,31 @@ function closeAbbrModal() { activeModalCount = Math.max(0, activeModalCount - 1)
 function openMonthlyModal() { activeModalCount++; document.getElementById('monthly-modal').style.display = 'flex'; loadMonthlyData(); }
 function closeMonthlyModal() { activeModalCount = Math.max(0, activeModalCount - 1); document.getElementById('monthly-modal').style.display = 'none'; }
 
+/**
+ * Trả về 5 tuần gần nhất kèm nhãn ngày thực tế.
+ * Nhãn format: "Day D/M – Day D/M" (bao gồm tuần giao thoa 2 tháng).
+ * @returns {Array<{wId: string|null, label: string}>}
+ */
 function getMonthWeeks() {
-    const sortedIds = Object.keys(appData.weeks).sort((a,b) => new Date(a) - new Date(b));
-    return sortedIds.slice(-4);
+    const sortedIds = Object.keys(appData.weeks).sort((a, b) => new Date(a) - new Date(b));
+    const last5 = sortedIds.slice(-5);
+
+    // Pad đủ 5 phần tử nếu chưa đủ
+    while (last5.length < 5) last5.unshift(null);
+
+    return last5.map(wId => {
+        if (!wId) return { wId: null, label: '—' };
+        try {
+            const p = wId.split('-');
+            const monday = new Date(p[0], p[1] - 1, p[2]);
+            const sunday = new Date(monday);
+            sunday.setDate(monday.getDate() + 6);
+            const fmt = (d) => `${d.getDate()}/${d.getMonth() + 1}`;
+            return { wId, label: `${fmt(monday)} – ${fmt(sunday)}` };
+        } catch {
+            return { wId, label: wId };
+        }
+    });
 }
 
 function loadMonthlyData() {
@@ -917,26 +917,22 @@ function updateRowStatus(id) {
 function switchToWeek(targetWeekId) {
     saveData();
     viewingWeekId = targetWeekId;
+    isViewingNextWeek = false;
 
-    const parts = currentRealWeekId.split('-');
-    const thisMonday = new Date(parts[0], parts[1] - 1, parts[2]);
-    const nextMonday = new Date(thisMonday);
-    nextMonday.setDate(thisMonday.getDate() + 7);
-    const nextWeekId = formatDateKey(nextMonday);
-
-    isViewingNextWeek = (targetWeekId === nextWeekId);
-
-    const btn = document.getElementById('nav-btn-schedule');
     const title = document.getElementById('board-title');
-    if (isViewingNextWeek) {
-        btn.classList.add('active-btn'); btn.innerText = "⬅ Back to Current"; title.innerText = "NEXT WEEK PLAN";
-    } else if (targetWeekId === currentRealWeekId) {
-        btn.classList.remove('active-btn'); btn.innerText = "📅 Plan Next Week"; title.innerText = "CURRENT WEEK";
+    if (targetWeekId === currentRealWeekId) {
+        title.innerText = "CURRENT WEEK";
     } else {
-        btn.classList.remove('active-btn'); btn.innerText = "📅 Plan Next Week"; title.innerText = "PAST WEEK";
+        // Hiển thị tháng/năm của tuần được chọn
+        const p = targetWeekId.split('-');
+        const d = new Date(p[0], p[1] - 1, p[2]);
+        const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        title.innerText = `${monthNames[d.getMonth()].toUpperCase()} ${d.getFullYear()}`;
     }
 
-    if (!appData.weeks[viewingWeekId]) { appData.weeks[viewingWeekId] = { tasks: {}, habits: {}, notes: {} }; }
+    if (!appData.weeks[viewingWeekId]) {
+        appData.weeks[viewingWeekId] = { tasks: {}, habits: {}, notes: {} };
+    }
 
     closeMonthlyModal();
     generateWeekDates(viewingWeekId);
