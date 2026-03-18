@@ -403,8 +403,44 @@ svg.wave-chart {
 .goal-item input:focus { border-color: var(--border-dark); }
 
 .weekly-cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center; }
-.week-card { background: rgba(255,255,255,0.8); padding: 15px; border-radius: 12px; border: 2px solid rgba(194, 139, 98, 0.4); box-shadow: 0 2px 8px rgba(0,0,0,0.02);}
-.week-card h4 { margin: 0 0 8px; font-size: 13px; color: var(--border-darker); text-transform: uppercase; }
+
+/* Refactored .week-card for Monthly Summary */
+.week-card { 
+    background: rgba(255,255,255,0.8); 
+    padding: 15px; 
+    border-radius: 12px; 
+    border: 2px solid rgba(194, 139, 98, 0.4); 
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.week-card h4 { margin: 0 0 12px; font-size: 13px; color: var(--border-darker); text-transform: uppercase; text-align: center; }
+
+/* Added layout classes for the Week Card Stats and Buttons */
+.week-card-stats {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 12px;
+}
+.detail-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+    width: 100%;
+    margin-top: auto;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+.detail-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #e0e0e0;
+    color: #888;
+    border-color: #ccc;
+    box-shadow: none;
+    transform: none;
+}
 
 .goal-reality-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .goal-reality-table th, .goal-reality-table td { border: 2px solid rgba(194, 139, 98, 0.4); padding: 12px; text-align: left; }
