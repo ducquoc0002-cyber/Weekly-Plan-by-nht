@@ -1,4 +1,4 @@
-const sUrl = 'https://bqrscbyuzqvdqvrvhlzn.supabase.co';
+﻿﻿﻿﻿const sUrl = 'https://bqrscbyuzqvdqvrvhlzn.supabase.co';
 const sKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxcnNjYnl1enF2ZHF2cnZobHpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODc0MzQsImV4cCI6MjA4ODY2MzQzNH0.UpRpCxKWGtWzvqndTSnjQEShXa8f54T1KqLM8jWhumE';
 const sbClient = window.supabase.createClient(sUrl, sKey);
 let currentUser = null;
@@ -292,7 +292,7 @@ function renderCalendar() {
     const calGrid = document.getElementById('cal-grid-days'); let html = '';
     for(let i=0; i<startDay; i++) { html += `<div class="cal-date"></div>`; }
     for(let i=1; i<=daysInMonth; i++) {
-        if(i === today && isCurrentMonth && !isViewingNextWeek) { html += `<div class="cal-date today">${i}</div>`; } 
+        if(i === today && isCurrentMonth && viewingWeekId === currentRealWeekId) { html += `<div class="cal-date today">${i}</div>`; } 
         else { html += `<div class="cal-date">${i}</div>`; }
     }
     calGrid.innerHTML = html;
@@ -736,23 +736,21 @@ function closeMonthlyModal() { activeModalCount = Math.max(0, activeModalCount -
  * Label format: "D/M – D/M" dựa trên ngày thực tế của tuần đó.
  */
 function getMonthWeeks() {
-    const sortedIds = Object.keys(appData.weeks).sort((a, b) => new Date(a) - new Date(b));
-    const last5 = sortedIds.slice(-5);
-    while (last5.length < 5) last5.unshift(null);
-
-    return last5.map(wId => {
-        if (!wId) return { wId: null, label: '—' };
-        try {
-            const p = wId.split('-');
-            const monday = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
-            const sunday = new Date(monday);
-            sunday.setDate(monday.getDate() + 6);
-            const fmt = d => `${d.getDate()}/${d.getMonth() + 1}`;
-            return { wId, label: `${fmt(monday)}–${fmt(sunday)}` };
-        } catch (e) {
-            return { wId, label: wId };
-        }
-    });
+    const [y, m] = viewingMonthId.split('-').map(Number);
+    const firstOfMonth = new Date(y, m - 1, 1);
+    const fmt = d => `${d.getDate()}/${d.getMonth() + 1}`;
+    const blocks = [];
+    let monday = getMonday(firstOfMonth);
+    for (let i = 0; i < 5; i++) {
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        const wId = formatDateKey(monday);
+        const label = `${fmt(monday)}–${fmt(sunday)}`;
+        blocks.push({ wId: appData.weeks[wId] ? wId : null, label, mondayDate: new Date(monday) });
+        monday = new Date(monday);
+        monday.setDate(monday.getDate() + 7);
+    }
+    return blocks;
 }
 
 function loadMonthlyData() {
@@ -765,42 +763,49 @@ function loadMonthlyData() {
         document.getElementById(`gr-status-${i}`).value = mData[`gr_status_${i}`] || "Pending";
         updateRowStatus(i);
     }
-    
-    const wIds = getMonthWeeks();
+
+    const weekBlocks = getMonthWeeks();
     const colsContainer = document.getElementById('modal-weekly-cols');
     colsContainer.innerHTML = '';
-    
+    colsContainer.style.gridTemplateColumns = 'repeat(5, 1fr)';
+
     let dailyTaskPcts = [];
-    
-    for(let i=0; i<4; i++) {
-        let wId = wIds[i]; let taskPct = 0; let habPct = 0;
-        if(wId && appData.weeks[wId]) {
-            const wd = appData.weeks[wId];
-            let tDoneTotal=0, tTotalCount=0, hDone=0, hTotal=0;
-            for(let d=0; d<7; d++) {
-                let dayDone=0, dayTotal=0;
-                for(let t=0; t<10; t++) {
-                    if(wd.tasks[`t_name_${d}_${t}`]) {
-                        dayTotal++; tTotalCount++;
-                        if(wd.tasks[`t_check_${d}_${t}`]) { dayDone++; tDoneTotal++; }
+
+    weekBlocks.forEach((block, i) => {
+        const wId = block.wId;
+        const wIdForNav = formatDateKey(block.mondayDate);
+        let taskPct = 0, habPct = 0;
+        try {
+            if (wId && appData.weeks[wId]) {
+                const wd = appData.weeks[wId];
+                let tDoneTotal = 0, tTotalCount = 0, hDone = 0, hTotal = 0;
+                for (let d = 0; d < 7; d++) {
+                    let dayDone = 0, dayTotal = 0;
+                    for (let t = 0; t < 10; t++) {
+                        if (wd.tasks[`t_name_${d}_${t}`]) {
+                            dayTotal++; tTotalCount++;
+                            if (wd.tasks[`t_check_${d}_${t}`]) { dayDone++; tDoneTotal++; }
+                        }
+                    }
+                    dailyTaskPcts.push(dayTotal > 0 ? (dayDone / dayTotal) * 100 : 0);
+                }
+                if (tTotalCount > 0) taskPct = Math.round((tDoneTotal / tTotalCount) * 100);
+                for (let h = 0; h < 5; h++) {
+                    if (wd.habits[`h_name_${h}`]) {
+                        for (let d = 0; d < 7; d++) { hTotal++; if (wd.habits[`h_check_${h}_${d}`]) hDone++; }
                     }
                 }
-                dailyTaskPcts.push(dayTotal > 0 ? (dayDone/dayTotal)*100 : 0);
+                if (hTotal > 0) habPct = Math.round((hDone / hTotal) * 100);
+            } else {
+                for (let d = 0; d < 7; d++) dailyTaskPcts.push(0);
             }
-            if(tTotalCount>0) taskPct = Math.round((tDoneTotal/tTotalCount)*100);
-            for(let h=0; h<5; h++) {
-                if(wd.habits[`h_name_${h}`]) {
-                    for(let d=0; d<7; d++) { hTotal++; if(wd.habits[`h_check_${h}_${d}`]) hDone++; }
-                }
-            }
-            if(hTotal>0) habPct = Math.round((hDone/hTotal)*100);
-        } else {
-            for(let d=0; d<7; d++) dailyTaskPcts.push(0);
+        } catch(e) {
+            for (let d = 0; d < 7; d++) dailyTaskPcts.push(0);
         }
-        
+
         colsContainer.innerHTML += `
             <div class="week-card">
-                <h4>Week ${i+1}${wId ? `<br><span style="font-size:10px; font-weight:600; color:#aaa; text-transform:none;">${wId}</span>` : ''}</h4>
+                <h4 style="font-size:11px; margin:0 0 10px; text-transform:none;">${block.label}</h4>
                 <div class="week-card-stats">
                     <div>
                         <div style="font-size:18px; font-weight:800; color:var(--text-main);">${taskPct}%</div>
@@ -811,98 +816,86 @@ function loadMonthlyData() {
                         <div style="font-size:10px; color:#888;">Habits</div>
                     </div>
                 </div>
-                <button class="nav-btn detail-btn" ${wId ? `onclick="switchToWeek('${wId}')"` : 'disabled'}>Detail</button>
+                <button class="nav-btn detail-btn" onclick="switchToWeek('${wIdForNav}')">Detail</button>
             </div>
         `;
-    }
-    
+    });
+
     let barHtml = `<svg viewBox="0 -10 750 180" style="width:100%; height:100%; overflow:visible;">`;
     barHtml += `<line x1="40" y1="10" x2="740" y2="10" stroke="rgba(139, 94, 60, 0.2)" stroke-dasharray="4" stroke-width="1"></line>`;
     barHtml += `<line x1="40" y1="80" x2="740" y2="80" stroke="rgba(139, 94, 60, 0.2)" stroke-dasharray="4" stroke-width="1"></line>`;
     barHtml += `<line x1="40" y1="150" x2="740" y2="150" stroke="rgba(139, 94, 60, 0.5)" stroke-width="1"></line>`;
-    
     barHtml += `<text x="30" y="14" text-anchor="end" font-size="10" fill="var(--border-darker)" font-weight="600">100%</text>`;
     barHtml += `<text x="30" y="84" text-anchor="end" font-size="10" fill="var(--border-darker)" font-weight="600">50%</text>`;
     barHtml += `<text x="30" y="154" text-anchor="end" font-size="10" fill="var(--border-darker)" font-weight="600">0%</text>`;
 
     if (dailyTaskPcts.length > 0) {
-        let chartWidth = 700;
-        let startX = 40;
-        let barWidth = (chartWidth / dailyTaskPcts.length) - 4;
-        
-        dailyTaskPcts.forEach((pct, i) => {
-            let h = (pct / 100) * 140; 
-            let x = startX + i * (chartWidth / dailyTaskPcts.length) + 2;
-            let y = 150 - h;
-            barHtml += `<rect x="${x}" y="${y}" width="${barWidth}" height="${h}" fill="var(--border-color)" rx="2"></rect>`;
+        const chartWidth = 700, startX = 40;
+        const barWidth = (chartWidth / dailyTaskPcts.length) - 4;
+        dailyTaskPcts.forEach((pct, idx) => {
+            const bh = (pct / 100) * 140;
+            const bx = startX + idx * (chartWidth / dailyTaskPcts.length) + 2;
+            const by = 150 - bh;
+            barHtml += `<rect x="${bx}" y="${by}" width="${barWidth}" height="${bh}" fill="var(--border-color)" rx="2"></rect>`;
         });
-
-        let weekWidth = chartWidth / 4;
-        for(let w=0; w<4; w++) {
-            let wx = startX + (w * weekWidth) + (weekWidth / 2);
-            barHtml += `<text x="${wx}" y="170" text-anchor="middle" font-size="11" fill="var(--border-darker)" font-weight="700">Week ${w+1}</text>`;
+        const weekWidth = chartWidth / 5;
+        weekBlocks.forEach((block, w) => {
+            const wx = startX + (w * weekWidth) + (weekWidth / 2);
+            barHtml += `<text x="${wx}" y="170" text-anchor="middle" font-size="9" fill="var(--border-darker)" font-weight="700">${block.label}</text>`;
             if (w > 0) {
-                let divX = startX + (w * weekWidth);
+                const divX = startX + (w * weekWidth);
                 barHtml += `<line x1="${divX}" y1="10" x2="${divX}" y2="155" stroke="rgba(139, 94, 60, 0.2)" stroke-width="1"></line>`;
             }
-        }
+        });
     }
     barHtml += `</svg>`;
     document.getElementById('monthly-bar-chart').innerHTML = barHtml;
 
     let habitStats = [];
-    for(let h=0; h<5; h++) {
-        let totalDones = 0;
-        let hName = "";
-        for(let i=0; i<4; i++) {
-            let wId = wIds[i];
-            if(wId && appData.weeks[wId] && appData.weeks[wId].habits[`h_name_${h}`]) {
+    for (let h = 0; h < 5; h++) {
+        let totalDones = 0, hName = "";
+        weekBlocks.forEach(block => {
+            const wId = block.wId;
+            if (wId && appData.weeks[wId] && appData.weeks[wId].habits[`h_name_${h}`]) {
                 hName = appData.weeks[wId].habits[`h_name_${h}`];
-                for(let d=0; d<7; d++) {
-                    if(appData.weeks[wId].habits[`h_check_${h}_${d}`]) totalDones++;
+                for (let d = 0; d < 7; d++) {
+                    if (appData.weeks[wId].habits[`h_check_${h}_${d}`]) totalDones++;
                 }
             }
-        }
-        if(hName && totalDones > 0) habitStats.push({ name: hName, count: totalDones });
+        });
+        if (hName && totalDones > 0) habitStats.push({ name: hName, count: totalDones });
     }
 
-    let totalHabitDones = habitStats.reduce((sum, h) => sum + h.count, 0);
+    const totalHabitDones = habitStats.reduce((sum, h) => sum + h.count, 0);
     let pieHtml = `<svg viewBox="-110 -110 220 220" style="width:100%; height:100%; overflow:visible;">`;
-    if(totalHabitDones === 0) {
+    if (totalHabitDones === 0) {
         pieHtml += `<text x="0" y="0" text-anchor="middle" fill="#888" font-size="12">No Data</text>`;
     } else {
         let startAngle = 0;
         const colors = ['#E6C655', '#90B496', '#86A8BC', '#E3A77A', '#FA8C28'];
         habitStats.forEach((h, i) => {
-            let pct = h.count / totalHabitDones;
-            let angle = pct * 2 * Math.PI;
-            let endAngle = startAngle + angle;
-            
-            let x1 = Math.cos(startAngle) * 60; let y1 = Math.sin(startAngle) * 60;
-            let x2 = Math.cos(endAngle) * 60; let y2 = Math.sin(endAngle) * 60;
-            let largeArc = pct > 0.5 ? 1 : 0;
-            
+            const pct = h.count / totalHabitDones;
+            const angle = pct * 2 * Math.PI;
+            const endAngle = startAngle + angle;
+            const x1 = Math.cos(startAngle) * 60; const y1 = Math.sin(startAngle) * 60;
+            const x2 = Math.cos(endAngle) * 60; const y2 = Math.sin(endAngle) * 60;
+            const largeArc = pct > 0.5 ? 1 : 0;
             let pathData = `M 0 0 L ${x1} ${y1} A 60 60 0 ${largeArc} 1 ${x2} ${y2} Z`;
-            if (pct === 1) { pathData = `M 60 0 A 60 60 0 1 1 -60 0 A 60 60 0 1 1 60 0`; }
-            
+            if (pct === 1) pathData = `M 60 0 A 60 60 0 1 1 -60 0 A 60 60 0 1 1 60 0`;
             pieHtml += `<path d="${pathData}" fill="${colors[i % colors.length]}" stroke="#fff" stroke-width="1"></path>`;
-            
-            let midAngle = startAngle + angle / 2;
-            let lineX1 = Math.cos(midAngle) * 60; let lineY1 = Math.sin(midAngle) * 60;
-            let lineX2 = Math.cos(midAngle) * 75; let lineY2 = Math.sin(midAngle) * 75;
-            let textX = Math.cos(midAngle) * 80; let textY = Math.sin(midAngle) * 80;
-            let textAnchor = Math.cos(midAngle) > 0 ? "start" : "end";
-            
-            pieHtml += `<polyline points="${lineX1},${lineY1} ${lineX2},${lineY2}" fill="none" stroke="${colors[i % colors.length]}" stroke-width="1.5"></polyline>`;
-            pieHtml += `<text x="${textX}" y="${textY}" text-anchor="${textAnchor}" alignment-baseline="middle" font-size="10" font-weight="700" fill="var(--text-main)">${h.name} (${Math.round(pct*100)}%)</text>`;
-            
+            const midAngle = startAngle + angle / 2;
+            const lx1 = Math.cos(midAngle) * 60; const ly1 = Math.sin(midAngle) * 60;
+            const lx2 = Math.cos(midAngle) * 75; const ly2 = Math.sin(midAngle) * 75;
+            const tx = Math.cos(midAngle) * 80; const ty = Math.sin(midAngle) * 80;
+            const anchor = Math.cos(midAngle) > 0 ? "start" : "end";
+            pieHtml += `<polyline points="${lx1},${ly1} ${lx2},${ly2}" fill="none" stroke="${colors[i % colors.length]}" stroke-width="1.5"></polyline>`;
+            pieHtml += `<text x="${tx}" y="${ty}" text-anchor="${anchor}" alignment-baseline="middle" font-size="10" font-weight="700" fill="var(--text-main)">${h.name} (${Math.round(pct*100)}%)</text>`;
             startAngle = endAngle;
         });
     }
     pieHtml += `</svg>`;
     document.getElementById('monthly-pie-chart').innerHTML = pieHtml;
 }
-
 function saveMonthly() {
     appData.monthly = appData.monthly || {};
     for(let i=1; i<=3; i++) {
@@ -966,11 +959,9 @@ function renderMonthPickerGrid() {
     var currentYear = now.getFullYear();
     var currentMonthIdx = now.getMonth();
     var monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    var vParts = viewingWeekId.split('-');
-    var vDate = new Date(parseInt(vParts[0]), parseInt(vParts[1]) - 1, parseInt(vParts[2]));
-    var activeMonthIdx = vDate.getMonth();
-    var activeYear = vDate.getFullYear();
-    var html = '';
+    var activeMonthIdx = parseInt(viewingMonthId.split('-')[1]) - 1;
+    var activeYear = parseInt(viewingMonthId.split('-')[0]);
+    var html = "";
     for (var mIdx = 0; mIdx < 12; mIdx++) {
         var isPast = (currentYear === activeYear && mIdx < currentMonthIdx) || (activeYear < currentYear);
         var isCurrent = (mIdx === currentMonthIdx);
