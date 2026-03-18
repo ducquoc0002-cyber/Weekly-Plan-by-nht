@@ -516,3 +516,63 @@ body:has(.modal-overlay[style*="flex"]) .day-header span {
     border-radius: 6px; font-size: 11px; font-weight: 500; pointer-events: none; z-index: 9999;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15); line-height: 1.4;
 }
+
+/* --- Month Picker Dashboard --- */
+.month-picker__grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+}
+
+.month-picker__cell {
+    background: rgba(255,255,255,0.85);
+    border: 2px solid rgba(194, 139, 98, 0.5);
+    border-radius: 12px;
+    padding: 14px 8px;
+    text-align: center;
+    cursor: pointer;
+    font-family: var(--font-main);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-main);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.month-picker__cell:hover:not(.month-picker__cell--past) {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 18px rgba(139, 94, 60, 0.18);
+    background: #fff;
+    border-color: var(--border-dark);
+}
+
+.month-picker__cell--current {
+    background: var(--summary-soft-peach);
+    border-color: var(--border-color);
+}
+
+.month-picker__cell--active {
+    background: var(--border-color);
+    color: #fff;
+    border-color: var(--border-darker);
+}
+
+.month-picker__cell--past {
+    opacity: 0.38;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.month-picker__cell--has-data::after {
+    content: '●';
+    display: block;
+    font-size: 8px;
+    color: var(--stroke-bright-orange);
+    margin-top: 4px;
+}
+
+@media (max-width: 600px) {
+    .month-picker__grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}

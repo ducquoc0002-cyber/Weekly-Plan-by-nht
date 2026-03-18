@@ -34,7 +34,7 @@
     <div class="top-nav">
         <div style="display: flex; gap: 10px; z-index: 2;">
             <button class="nav-btn" onclick="openMonthlyModal()">📊 Monthly Summary</button>
-            <button id="nav-btn-schedule" class="nav-btn" onclick="toggleWeekView()">📅 Plan Next Week</button>
+            <button id="nav-btn-month" class="nav-btn" onclick="openMonthPickerModal()">📅 Plan Next Month</button>
         </div>
 
         <div style="position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 20px; z-index: 1;">
@@ -227,6 +227,17 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    <div id="month-picker-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 680px;">
+            <div class="modal-header">
+                <h2 style="margin:0; color:var(--text-main); font-weight:800;">📅 Select Month to Plan</h2>
+                <button class="modal-close" onclick="closeMonthPickerModal()">×</button>
+            </div>
+            <p style="font-size:12px; color:var(--text-gray); margin: -10px 0 20px; font-weight:600;">Past months are disabled. Click an available month to switch dashboard view.</p>
+            <div class="month-picker__grid" id="month-picker-grid"></div>
         </div>
     </div>
 
