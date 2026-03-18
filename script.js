@@ -23,6 +23,7 @@ let weekDates = [];
 let currentRealWeekId = "";
 let viewingWeekId = "";
 let isViewingNextWeek = false;
+let activeModalCount = 0;
 
 let appData = { weeks: {}, monthly: {}, abbrs: {} };
 let saveTimeout;
@@ -261,20 +262,19 @@ function generateWeekDates(mondayStr) {
 
 function toggleWeekView() {
     saveData(); 
-    isViewingNextWeek = !isViewingNextWeek;
-    
     const btn = document.getElementById('nav-btn-schedule');
     const title = document.getElementById('board-title');
-    
     const parts = currentRealWeekId.split('-');
     const thisMonday = new Date(parts[0], parts[1] - 1, parts[2]);
     
-    if (isViewingNextWeek) {
+    if (viewingWeekId === currentRealWeekId) {
+        isViewingNextWeek = true;
         const nextMonday = new Date(thisMonday);
         nextMonday.setDate(thisMonday.getDate() + 7);
         viewingWeekId = formatDateKey(nextMonday);
         btn.classList.add('active-btn'); btn.innerText = "⬅ Back to Current"; title.innerText = "NEXT WEEK PLAN";
     } else {
+        isViewingNextWeek = false;
         viewingWeekId = currentRealWeekId;
         btn.classList.remove('active-btn'); btn.innerText = "📅 Plan Next Week"; title.innerText = "CURRENT WEEK";
     }
@@ -309,7 +309,7 @@ function renderCalendar() {
     const calGrid = document.getElementById('cal-grid-days'); let html = '';
     for(let i=0; i<startDay; i++) { html += `<div class="cal-date"></div>`; }
     for(let i=1; i<=daysInMonth; i++) {
-        if(i === today && isCurrentMonth && !isViewingNextWeek) { html += `<div class="cal-date today">${i}</div>`; } 
+        if(i === today && isCurrentMonth && !isViewingNextWeek && viewingWeekId === currentRealWeekId) { html += `<div class="cal-date today">${i}</div>`; } 
         else { html += `<div class="cal-date">${i}</div>`; }
     }
     calGrid.innerHTML = html;
@@ -585,7 +585,7 @@ function updateDay(dIdx) {
     const now = new Date();
     const todayDay = now.getDay();
     const todayIdx = todayDay === 0 ? 6 : todayDay - 1;
-    const isPast = (!isViewingNextWeek && dIdx < todayIdx);
+    const isPast = (!isViewingNextWeek && dIdx < todayIdx && viewingWeekId === currentRealWeekId) || (viewingWeekId < currentRealWeekId);
     
     for(let t = 0; t < tasksPerDay; t++) {
         const cb = document.getElementById(`t_check_${dIdx}_${t}`);
@@ -616,7 +616,7 @@ function updateDay(dIdx) {
     dailyPercents[dIdx] = percent; dailyStats[dIdx] = { done, total: totalActive };
     
     let headerHtml = `${daysData[dIdx].name} (${weekDates[dIdx]})`;
-    if (isPast && done < totalActive && totalActive > 0) {
+    if (isPast && done < totalActive && totalActive > 0 && activeModalCount === 0) {
         headerHtml += `<span style="position: absolute; top: -16px; right: -5px; z-index: 9999; color: #D32F2F; font-size: 64px; font-weight: 900; transform: rotate(15deg); line-height: 1; font-family: 'Comic Sans MS', cursive; text-shadow: 2px 2px 0px rgba(255,255,255,0.8);">!!</span>`;
     }
     document.getElementById(`day_header_${dIdx}`).innerHTML = headerHtml;
@@ -711,7 +711,7 @@ function loadWeekData() {
             document.getElementById(`t_name_${d}_${t}`).value = wData.tasks[`t_name_${d}_${t}`] || "";
             document.getElementById(`t_h_start_${d}_${t}`).value = wData.tasks[`t_h_start_${d}_${t}`] || "";
             document.getElementById(`t_m_start_${d}_${t}`).value = wData.tasks[`t_m_start_${d}_${t}`] || "";
-            document.getElementById(`t_h_end_${d}_${t}`).value = wData.tasks[`t_h_end_${d}_${t}`] || "";
+            document.getElementById(`t_h_end_${d}_${t}`].value = wData.tasks[`t_h_end_${d}_${t}`] || "";
             document.getElementById(`t_m_end_${d}_${t}`).value = wData.tasks[`t_m_end_${d}_${t}`] || "";
             document.getElementById(`t_check_${d}_${t}`).checked = wData.tasks[`t_check_${d}_${t}`] || false;
             document.getElementById(`task_div_${d}_${t}`).setAttribute('data-priority', wData.tasks[`t_pri_${d}_${t}`] || "3");
@@ -731,14 +731,51 @@ function loadWeekData() {
     }
 }
 
-function openNoteModal() { document.getElementById('note-modal').style.display = 'flex'; }
-function closeNoteModal() { document.getElementById('note-modal').style.display = 'none'; }
+function openNoteModal() { document.getElementById('note-modal').style.display = 'flex'; activeModalCount++; updateAll(); }
+function closeNoteModal() { document.getElementById('note-modal').style.display = 'none'; activeModalCount--; updateAll(); }
 
-function openAbbrModal() { document.getElementById('abbr-modal').style.display = 'flex'; }
-function closeAbbrModal() { document.getElementById('abbr-modal').style.display = 'none'; }
+function openAbbrModal() { document.getElementById('abbr-modal').style.display = 'flex'; activeModalCount++; updateAll(); }
+function closeAbbrModal() { document.getElementById('abbr-modal').style.display = 'none'; activeModalCount--; updateAll(); }
 
-function openMonthlyModal() { document.getElementById('monthly-modal').style.display = 'flex'; loadMonthlyData(); }
-function closeMonthlyModal() { document.getElementById('monthly-modal').style.display = 'none'; }
+function openMonthlyModal() { document.getElementById('monthly-modal').style.display = 'flex'; activeModalCount++; loadMonthlyData(); updateAll(); }
+function closeMonthlyModal() { document.getElementById('monthly-modal').style.display = 'none'; activeModalCount--; updateAll(); }
+
+function switchToWeek(targetWeekId) {
+    if (!targetWeekId) return;
+    saveData();
+    viewingWeekId = targetWeekId;
+    
+    const btn = document.getElementById('nav-btn-schedule');
+    const title = document.getElementById('board-title');
+    
+    const parts = currentRealWeekId.split('-');
+    const thisMonday = new Date(parts[0], parts[1] - 1, parts[2]);
+    const nextMonday = new Date(thisMonday);
+    nextMonday.setDate(thisMonday.getDate() + 7);
+    const nextWeekId = formatDateKey(nextMonday);
+    
+    if (targetWeekId === nextWeekId) {
+        isViewingNextWeek = true;
+        btn.classList.add('active-btn'); 
+        btn.innerText = "⬅ Back to Current"; 
+        title.innerText = "NEXT WEEK PLAN";
+    } else if (targetWeekId === currentRealWeekId) {
+        isViewingNextWeek = false;
+        btn.classList.remove('active-btn'); 
+        btn.innerText = "📅 Plan Next Week"; 
+        title.innerText = "CURRENT WEEK";
+    } else {
+        isViewingNextWeek = false;
+        btn.classList.remove('active-btn'); 
+        btn.innerText = "📅 Back to Current"; 
+        title.innerText = "ARCHIVE WEEK";
+    }
+    
+    closeMonthlyModal();
+    if(!appData.weeks[viewingWeekId]) { appData.weeks[viewingWeekId] = { tasks: {}, habits: {}, notes: {} }; }
+    generateWeekDates(viewingWeekId);
+    rebuildUI();
+}
 
 function getMonthWeeks() {
     const sortedIds = Object.keys(appData.weeks).sort((a,b) => new Date(a) - new Date(b));
@@ -789,12 +826,21 @@ function loadMonthlyData() {
         }
         
         colsContainer.innerHTML += `
-            <div class="week-card">
-                <h4>Week ${i+1}</h4>
-                <div style="font-size:18px; font-weight:800; color:var(--text-main); margin:5px 0;">${taskPct}%</div>
-                <div style="font-size:10px; color:#888;">Tasks</div>
-                <div style="font-size:14px; font-weight:800; color:var(--border-darker); margin-top:8px;">${habPct}%</div>
-                <div style="font-size:10px; color:#888;">Habits</div>
+            <div class="week-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <h4 style="text-align: center; margin-bottom: 12px;">Week ${i+1}</h4>
+                <div style="display: flex; justify-content: space-around; width: 100%; text-align: center; margin-bottom: 12px;">
+                    <div>
+                        <div style="font-size:16px; font-weight:800; color:var(--text-main); margin:0;">${taskPct}%</div>
+                        <div style="font-size:10px; color:#888;">Tasks</div>
+                    </div>
+                    <div>
+                        <div style="font-size:16px; font-weight:800; color:var(--border-darker); margin:0;">${habPct}%</div>
+                        <div style="font-size:10px; color:#888;">Habits</div>
+                    </div>
+                </div>
+                ${wId 
+                    ? `<button class="nav-btn detail-btn" style="padding: 6px 12px; font-size: 11px; width: 100%; margin-top: auto;" onclick="switchToWeek('${wId}')">Detail</button>` 
+                    : `<button class="nav-btn detail-btn" style="padding: 6px 12px; font-size: 11px; width: 100%; margin-top: auto; opacity: 0.5; cursor: not-allowed;" disabled>No Data</button>`}
             </div>
         `;
     }
