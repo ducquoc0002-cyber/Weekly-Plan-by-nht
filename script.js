@@ -732,27 +732,24 @@ function openMonthlyModal() {
 function closeMonthlyModal() { activeModalCount = Math.max(0, activeModalCount - 1); document.getElementById('monthly-modal').style.display = 'none'; }
 
 /**
- * Trả về 5 tuần gần nhất kèm nhãn ngày thực tế.
- * Nhãn format: "Day D/M – Day D/M" (bao gồm tuần giao thoa 2 tháng).
- * @returns {Array<{wId: string|null, label: string}>}
+ * Trả về 5 tuần gần nhất, mỗi phần tử là { wId: string|null, label: string }.
+ * Label format: "D/M – D/M" dựa trên ngày thực tế của tuần đó.
  */
 function getMonthWeeks() {
     const sortedIds = Object.keys(appData.weeks).sort((a, b) => new Date(a) - new Date(b));
     const last5 = sortedIds.slice(-5);
-
-    // Pad đủ 5 phần tử nếu chưa đủ
     while (last5.length < 5) last5.unshift(null);
 
     return last5.map(wId => {
         if (!wId) return { wId: null, label: '—' };
         try {
             const p = wId.split('-');
-            const monday = new Date(p[0], p[1] - 1, p[2]);
+            const monday = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
             const sunday = new Date(monday);
             sunday.setDate(monday.getDate() + 6);
-            const fmt = (d) => `${d.getDate()}/${d.getMonth() + 1}`;
-            return { wId, label: `${fmt(monday)} – ${fmt(sunday)}` };
-        } catch {
+            const fmt = d => `${d.getDate()}/${d.getMonth() + 1}`;
+            return { wId, label: `${fmt(monday)}–${fmt(sunday)}` };
+        } catch (e) {
             return { wId, label: wId };
         }
     });
@@ -947,6 +944,81 @@ function switchToWeek(targetWeekId) {
     }
 
     closeMonthlyModal();
+    generateWeekDates(viewingWeekId);
+    rebuildUI();
+}
+
+// --- Month Picker Modal ---
+
+function openMonthPickerModal() {
+    activeModalCount++;
+    renderMonthPickerGrid();
+    document.getElementById('month-picker-modal').style.display = 'flex';
+}
+
+function closeMonthPickerModal() {
+    activeModalCount = Math.max(0, activeModalCount - 1);
+    document.getElementById('month-picker-modal').style.display = 'none';
+}
+
+function renderMonthPickerGrid() {
+    var now = new Date();
+    var currentYear = now.getFullYear();
+    var currentMonthIdx = now.getMonth();
+    var monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    var vParts = viewingWeekId.split('-');
+    var vDate = new Date(parseInt(vParts[0]), parseInt(vParts[1]) - 1, parseInt(vParts[2]));
+    var activeMonthIdx = vDate.getMonth();
+    var activeYear = vDate.getFullYear();
+    var html = '';
+    for (var mIdx = 0; mIdx < 12; mIdx++) {
+        var isPast = (currentYear === activeYear && mIdx < currentMonthIdx) || (activeYear < currentYear);
+        var isCurrent = (mIdx === currentMonthIdx);
+        var isActive = (mIdx === activeMonthIdx && currentYear === activeYear);
+        var hasData = Object.keys(appData.weeks).some(function(wId) {
+            var p = wId.split('-');
+            return parseInt(p[0]) === currentYear && parseInt(p[1]) - 1 === mIdx;
+        });
+        var cls = 'month-picker__cell';
+        if (isPast) cls += ' month-picker__cell--past';
+        else if (isActive) cls += ' month-picker__cell--active';
+        else if (isCurrent) cls += ' month-picker__cell--current';
+        if (hasData && !isPast) cls += ' month-picker__cell--has-data';
+        var mId = currentYear + '-' + String(mIdx + 1).padStart(2, '0');
+        html += '<div class="' + cls + '" data-month-id="' + mId + '">' + monthNames[mIdx] + '<br><span style="font-size:10px;font-weight:600;opacity:0.7;">' + currentYear + '</span></div>';
+    }
+    var grid = document.getElementById('month-picker-grid');
+    grid.innerHTML = html;
+    grid.onclick = function(e) {
+        var cell = e.target.closest('.month-picker__cell');
+        if (!cell || cell.classList.contains('month-picker__cell--past')) return;
+        switchToMonth(cell.dataset.monthId);
+    };
+}
+
+function switchToMonth(monthId) {
+    var parts = monthId.split('-').map(Number);
+    var y = parts[0]; var m = parts[1];
+    var firstOfMonth = new Date(y, m - 1, 1);
+    var mondayOfFirstWeek = getMonday(firstOfMonth);
+    var targetWeekId = formatDateKey(mondayOfFirstWeek);
+    if (!appData.weeks[targetWeekId]) {
+        appData.weeks[targetWeekId] = { tasks: {}, habits: {}, notes: {} };
+    }
+    var now = new Date();
+    var isCurrentMonth = (y === now.getFullYear() && m - 1 === now.getMonth());
+    var title = document.getElementById('board-title');
+    var shortMonths = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    if (isCurrentMonth) {
+        viewingWeekId = currentRealWeekId;
+        isViewingNextWeek = false;
+        title.innerText = "CURRENT WEEK";
+    } else {
+        viewingWeekId = targetWeekId;
+        isViewingNextWeek = false;
+        title.innerText = shortMonths[m - 1].toUpperCase() + ' ' + y;
+    }
+    closeMonthPickerModal();
     generateWeekDates(viewingWeekId);
     rebuildUI();
 }
