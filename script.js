@@ -47,17 +47,24 @@ async function checkAuth() {
 }
 
 async function handleLogin() {
-    const email = document.getElementById('auth-email').value;
+    const email = document.getElementById('auth-email').value.trim();
     const password = document.getElementById('auth-password').value;
     const msg = document.getElementById('auth-msg');
+    
+    if (!email || !password) {
+        msg.innerText = "Please enter both email and password.";
+        return;
+    }
+
     msg.innerText = "Checking...";
     
     const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+    
     if (error) {
-        msg.innerText = "Invalid email or password.";
+        msg.innerText = error.message || "Invalid email or password.";
     } else {
-        msg.innerText = "";
-        location.reload(); 
+        msg.innerText = "Login successful. Loading...";
+        await checkAuth(); 
     }
 }
 
