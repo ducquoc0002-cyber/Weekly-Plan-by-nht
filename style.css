@@ -442,6 +442,12 @@ svg.wave-chart {
     transform: none;
 }
 
+/* Hide !! indicators when a modal overlay is active */
+.modal-overlay[style*="flex"] ~ .dashboard-wrapper .day-header span,
+body:has(.modal-overlay[style*="flex"]) .day-header span {
+    display: none !important;
+}
+
 .goal-reality-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .goal-reality-table th, .goal-reality-table td { border: 2px solid rgba(194, 139, 98, 0.4); padding: 12px; text-align: left; }
 .goal-reality-table th { background: rgba(194, 139, 98, 0.2); font-weight: 800; text-transform: uppercase; color: var(--border-darker); }

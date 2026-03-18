@@ -30,6 +30,7 @@ let saveTimeout;
 let currentRightClickDay = null;
 let currentRightClickTask = null;
 let draggedTaskInfo = null;
+let activeModalCount = 0;
 
 async function checkAuth() {
     const { data: { session } } = await sbClient.auth.getSession();
@@ -616,7 +617,7 @@ function updateDay(dIdx) {
     dailyPercents[dIdx] = percent; dailyStats[dIdx] = { done, total: totalActive };
     
     let headerHtml = `${daysData[dIdx].name} (${weekDates[dIdx]})`;
-    if (isPast && done < totalActive && totalActive > 0) {
+    if (isPast && done < totalActive && totalActive > 0 && activeModalCount === 0) {
         headerHtml += `<span style="position: absolute; top: -16px; right: -5px; z-index: 9999; color: #D32F2F; font-size: 64px; font-weight: 900; transform: rotate(15deg); line-height: 1; font-family: 'Comic Sans MS', cursive; text-shadow: 2px 2px 0px rgba(255,255,255,0.8);">!!</span>`;
     }
     document.getElementById(`day_header_${dIdx}`).innerHTML = headerHtml;
@@ -731,14 +732,14 @@ function loadWeekData() {
     }
 }
 
-function openNoteModal() { document.getElementById('note-modal').style.display = 'flex'; }
-function closeNoteModal() { document.getElementById('note-modal').style.display = 'none'; }
+function openNoteModal() { activeModalCount++; document.getElementById('note-modal').style.display = 'flex'; }
+function closeNoteModal() { activeModalCount = Math.max(0, activeModalCount - 1); document.getElementById('note-modal').style.display = 'none'; }
 
-function openAbbrModal() { document.getElementById('abbr-modal').style.display = 'flex'; }
-function closeAbbrModal() { document.getElementById('abbr-modal').style.display = 'none'; }
+function openAbbrModal() { activeModalCount++; document.getElementById('abbr-modal').style.display = 'flex'; }
+function closeAbbrModal() { activeModalCount = Math.max(0, activeModalCount - 1); document.getElementById('abbr-modal').style.display = 'none'; }
 
-function openMonthlyModal() { document.getElementById('monthly-modal').style.display = 'flex'; loadMonthlyData(); }
-function closeMonthlyModal() { document.getElementById('monthly-modal').style.display = 'none'; }
+function openMonthlyModal() { activeModalCount++; document.getElementById('monthly-modal').style.display = 'flex'; loadMonthlyData(); }
+function closeMonthlyModal() { activeModalCount = Math.max(0, activeModalCount - 1); document.getElementById('monthly-modal').style.display = 'none'; }
 
 function getMonthWeeks() {
     const sortedIds = Object.keys(appData.weeks).sort((a,b) => new Date(a) - new Date(b));
@@ -790,11 +791,18 @@ function loadMonthlyData() {
         
         colsContainer.innerHTML += `
             <div class="week-card">
-                <h4>Week ${i+1}</h4>
-                <div style="font-size:18px; font-weight:800; color:var(--text-main); margin:5px 0;">${taskPct}%</div>
-                <div style="font-size:10px; color:#888;">Tasks</div>
-                <div style="font-size:14px; font-weight:800; color:var(--border-darker); margin-top:8px;">${habPct}%</div>
-                <div style="font-size:10px; color:#888;">Habits</div>
+                <h4>Week ${i+1}${wId ? `<br><span style="font-size:10px; font-weight:600; color:#aaa; text-transform:none;">${wId}</span>` : ''}</h4>
+                <div class="week-card-stats">
+                    <div>
+                        <div style="font-size:18px; font-weight:800; color:var(--text-main);">${taskPct}%</div>
+                        <div style="font-size:10px; color:#888;">Tasks</div>
+                    </div>
+                    <div>
+                        <div style="font-size:14px; font-weight:800; color:var(--border-darker);">${habPct}%</div>
+                        <div style="font-size:10px; color:#888;">Habits</div>
+                    </div>
+                </div>
+                <button class="nav-btn detail-btn" ${wId ? `onclick="switchToWeek('${wId}')"` : 'disabled'}>Detail</button>
             </div>
         `;
     }
@@ -904,4 +912,33 @@ function updateRowStatus(id) {
     row.classList.remove('status-achieved', 'status-pending');
     if(select.value === 'Achieved') row.classList.add('status-achieved');
     else if (select.value === 'Pending') row.classList.add('status-pending');
+}
+
+function switchToWeek(targetWeekId) {
+    saveData();
+    viewingWeekId = targetWeekId;
+
+    const parts = currentRealWeekId.split('-');
+    const thisMonday = new Date(parts[0], parts[1] - 1, parts[2]);
+    const nextMonday = new Date(thisMonday);
+    nextMonday.setDate(thisMonday.getDate() + 7);
+    const nextWeekId = formatDateKey(nextMonday);
+
+    isViewingNextWeek = (targetWeekId === nextWeekId);
+
+    const btn = document.getElementById('nav-btn-schedule');
+    const title = document.getElementById('board-title');
+    if (isViewingNextWeek) {
+        btn.classList.add('active-btn'); btn.innerText = "⬅ Back to Current"; title.innerText = "NEXT WEEK PLAN";
+    } else if (targetWeekId === currentRealWeekId) {
+        btn.classList.remove('active-btn'); btn.innerText = "📅 Plan Next Week"; title.innerText = "CURRENT WEEK";
+    } else {
+        btn.classList.remove('active-btn'); btn.innerText = "📅 Plan Next Week"; title.innerText = "PAST WEEK";
+    }
+
+    if (!appData.weeks[viewingWeekId]) { appData.weeks[viewingWeekId] = { tasks: {}, habits: {}, notes: {} }; }
+
+    closeMonthlyModal();
+    generateWeekDates(viewingWeekId);
+    rebuildUI();
 }
