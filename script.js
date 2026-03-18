@@ -1,4 +1,4 @@
-﻿﻿﻿﻿const sUrl = 'https://bqrscbyuzqvdqvrvhlzn.supabase.co';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿const sUrl = 'https://bqrscbyuzqvdqvrvhlzn.supabase.co';
 const sKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxcnNjYnl1enF2ZHF2cnZobHpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODc0MzQsImV4cCI6MjA4ODY2MzQzNH0.UpRpCxKWGtWzvqndTSnjQEShXa8f54T1KqLM8jWhumE';
 const sbClient = window.supabase.createClient(sUrl, sKey);
 let currentUser = null;
@@ -918,7 +918,7 @@ function updateRowStatus(id) {
 
 function switchToWeek(targetWeekId) {
     saveData();
-    viewingWeekId = targetWeekId;
+        viewingMonthId = monthId; viewingWeekId = targetWeekId;
     isViewingNextWeek = false;
 
     const title = document.getElementById('board-title');
@@ -945,10 +945,10 @@ function switchToWeek(targetWeekId) {
 
 function openMonthPickerModal() {
     activeModalCount++;
+    const _vp = viewingWeekId.split('-'); viewingMonthId = _vp[0] + '-' + _vp[1];
     renderMonthPickerGrid();
     document.getElementById('month-picker-modal').style.display = 'flex';
 }
-
 function closeMonthPickerModal() {
     activeModalCount = Math.max(0, activeModalCount - 1);
     document.getElementById('month-picker-modal').style.display = 'none';
@@ -988,18 +988,19 @@ function renderMonthPickerGrid() {
 }
 
 function switchToMonth(monthId) {
-    var parts = monthId.split('-').map(Number);
-    var y = parts[0]; var m = parts[1];
-    var firstOfMonth = new Date(y, m - 1, 1);
-    var mondayOfFirstWeek = getMonday(firstOfMonth);
-    var targetWeekId = formatDateKey(mondayOfFirstWeek);
+    const parts = monthId.split('-').map(Number);
+    const y = parts[0]; const m = parts[1];
+    const firstOfMonth = new Date(y, m - 1, 1);
+    const mondayOfFirstWeek = getMonday(firstOfMonth);
+    const targetWeekId = formatDateKey(mondayOfFirstWeek);
     if (!appData.weeks[targetWeekId]) {
         appData.weeks[targetWeekId] = { tasks: {}, habits: {}, notes: {} };
     }
-    var now = new Date();
-    var isCurrentMonth = (y === now.getFullYear() && m - 1 === now.getMonth());
-    var title = document.getElementById('board-title');
-    var shortMonths = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    viewingMonthId = monthId;
+    const now = new Date();
+    const isCurrentMonth = (y === now.getFullYear() && m - 1 === now.getMonth());
+    const title = document.getElementById('board-title');
+    const shortMonths = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     if (isCurrentMonth) {
         viewingWeekId = currentRealWeekId;
         isViewingNextWeek = false;
