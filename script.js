@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿const sUrl = 'https://bqrscbyuzqvdqvrvhlzn.supabase.co';
+﻿﻿﻿﻿﻿const sUrl = 'https://bqrscbyuzqvdqvrvhlzn.supabase.co';
 const sKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxcnNjYnl1enF2ZHF2cnZobHpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODc0MzQsImV4cCI6MjA4ODY2MzQzNH0.UpRpCxKWGtWzvqndTSnjQEShXa8f54T1KqLM8jWhumE';
 const sbClient = window.supabase.createClient(sUrl, sKey);
 let currentUser = null;
@@ -741,11 +741,6 @@ function getMonthWeeks() {
     const fmt = d => `${d.getDate()}/${d.getMonth() + 1}`;
     const blocks = [];
     let monday = getMonday(firstOfMonth);
-    // Nếu monday tính được nằm trước tháng hiện tại, advance lên tuần tiếp theo
-    if (monday < firstOfMonth) {
-        monday = new Date(monday);
-        monday.setDate(monday.getDate() + 7);
-    }
     for (let i = 0; i < 5; i++) {
         const sunday = new Date(monday);
         sunday.setDate(monday.getDate() + 6);
