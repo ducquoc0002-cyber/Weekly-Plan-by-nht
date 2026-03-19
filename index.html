@@ -1,14 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="style.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⭐</text></svg>">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weekly Plan Dashboard</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⭐</text></svg>">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -227,19 +226,6 @@
                     </tbody>
                 </table>
             </div>
-        </div>
-    </div>
-
-    <div id="month-basis-modal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 700px;">
-            <div class="modal-header">
-                <h2 style="margin:0; color:var(--text-main); font-weight:800;">📅 Monthly Basis</h2>
-                <button class="modal-close" onclick="closeMonthBasisModal()">×</button>
-            </div>
-            <p style="font-size:12px; color:var(--text-gray); margin: -10px 0 20px; font-weight:600;">
-                Select a month to switch your weekly plan view. Only available months are clickable.
-            </p>
-            <div class="month-basis__grid" id="month-basis-grid"></div>
         </div>
     </div>
 

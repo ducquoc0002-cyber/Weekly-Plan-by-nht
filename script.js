@@ -264,10 +264,6 @@ function generateWeekDates(mondayStr) {
     }
 }
 
-function toggleWeekView() {
-    // Kept as no-op for backward compatibility — replaced by Monthly Basis
-}
-
 function rebuildUI() {
     renderCalendar();
     document.getElementById('main-grid').querySelectorAll('.grid-item:nth-child(n+3)').forEach(e => e.remove());
