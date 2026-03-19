@@ -741,6 +741,11 @@ function getMonthWeeks() {
     const fmt = d => `${d.getDate()}/${d.getMonth() + 1}`;
     const blocks = [];
     let monday = getMonday(firstOfMonth);
+    // Nếu monday tính được nằm trước tháng hiện tại, advance lên tuần tiếp theo
+    if (monday < firstOfMonth) {
+        monday = new Date(monday);
+        monday.setDate(monday.getDate() + 7);
+    }
     for (let i = 0; i < 5; i++) {
         const sunday = new Date(monday);
         sunday.setDate(monday.getDate() + 6);
