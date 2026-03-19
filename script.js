@@ -919,7 +919,9 @@ function updateRowStatus(id) {
 
 function switchToWeek(targetWeekId) {
     saveData();
-        viewingMonthId = monthId; viewingWeekId = targetWeekId;
+    const _p = targetWeekId.split('-');
+    viewingMonthId = `${_p[0]}-${_p[1]}`;
+    viewingWeekId = targetWeekId;
     isViewingNextWeek = false;
 
     const title = document.getElementById('board-title');
