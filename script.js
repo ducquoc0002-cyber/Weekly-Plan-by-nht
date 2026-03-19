@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿const sUrl = 'https://bqrscbyuzqvdqvrvhlzn.supabase.co';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿const sUrl = 'https://bqrscbyuzqvdqvrvhlzn.supabase.co';
 const sKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxcnNjYnl1enF2ZHF2cnZobHpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODc0MzQsImV4cCI6MjA4ODY2MzQzNH0.UpRpCxKWGtWzvqndTSnjQEShXa8f54T1KqLM8jWhumE';
 const sbClient = window.supabase.createClient(sUrl, sKey);
 let currentUser = null;
@@ -754,7 +754,7 @@ function getMonthWeeks() {
 }
 
 function loadMonthlyData() {
-    const mData = appData.monthly || {};
+    const mData = (appData.monthly && appData.monthly[viewingMonthId]) ? appData.monthly[viewingMonthId] : {};
     for(let i=1; i<=3; i++) {
         document.getElementById(`mg-${i}`).value = mData[`mg_${i}`] || "";
         document.getElementById(`gr-name-${i}`).value = mData[`gr_name_${i}`] || "";
@@ -898,50 +898,17 @@ function loadMonthlyData() {
 }
 function saveMonthly() {
     appData.monthly = appData.monthly || {};
+    appData.monthly[viewingMonthId] = appData.monthly[viewingMonthId] || {};
+    const mObj = appData.monthly[viewingMonthId];
     for(let i=1; i<=3; i++) {
-        appData.monthly[`mg_${i}`] = document.getElementById(`mg-${i}`).value;
-        appData.monthly[`gr_name_${i}`] = document.getElementById(`gr-name-${i}`).value;
-        appData.monthly[`gr_target_${i}`] = document.getElementById(`gr-target-${i}`).value;
-        appData.monthly[`gr_actual_${i}`] = document.getElementById(`gr-actual-${i}`).value;
-        appData.monthly[`gr_status_${i}`] = document.getElementById(`gr-status-${i}`).value;
+        mObj[`mg_${i}`] = document.getElementById(`mg-${i}`).value;
+        mObj[`gr_name_${i}`] = document.getElementById(`gr-name-${i}`).value;
+        mObj[`gr_target_${i}`] = document.getElementById(`gr-target-${i}`).value;
+        mObj[`gr_actual_${i}`] = document.getElementById(`gr-actual-${i}`).value;
+        mObj[`gr_status_${i}`] = document.getElementById(`gr-status-${i}`).value;
     }
     saveGlobalData();
 }
-
-function updateRowStatus(id) {
-    const row = document.getElementById(`gr-row-${id}`);
-    const select = document.getElementById(`gr-status-${id}`);
-    row.classList.remove('status-achieved', 'status-pending');
-    if(select.value === 'Achieved') row.classList.add('status-achieved');
-    else if (select.value === 'Pending') row.classList.add('status-pending');
-}
-
-function switchToWeek(targetWeekId) {
-    saveData();
-        viewingMonthId = monthId; viewingWeekId = targetWeekId;
-    isViewingNextWeek = false;
-
-    const title = document.getElementById('board-title');
-    if (targetWeekId === currentRealWeekId) {
-        title.innerText = "CURRENT WEEK";
-    } else {
-        // Hiển thị tháng/năm của tuần được chọn
-        const p = targetWeekId.split('-');
-        const d = new Date(p[0], p[1] - 1, p[2]);
-        const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-        title.innerText = `${monthNames[d.getMonth()].toUpperCase()} ${d.getFullYear()}`;
-    }
-
-    if (!appData.weeks[viewingWeekId]) {
-        appData.weeks[viewingWeekId] = { tasks: {}, habits: {}, notes: {} };
-    }
-
-    closeMonthlyModal();
-    generateWeekDates(viewingWeekId);
-    rebuildUI();
-}
-
-// --- Month Picker Modal ---
 
 function openMonthPickerModal() {
     activeModalCount++;
