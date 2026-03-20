@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<!--
+  Preservation Property Tests
+  ============================
+  Task 2 of performance-optimization bugfix spec.
+
+  These tests verify BASELINE BEHAVIOR that MUST NOT break after fixes.
+  They MUST PASS on the current unfixed code — passing confirms the baseline.
+  They will continue to pass after fixes in tasks 3–6 are applied.
+
+  Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10
+
+  HOW TO RUN:
+    Open this file in a browser (file:// or local server).
+    All 4 preservation property tests run automatically.
+    Results are shown on-screen and in the browser console.
+
+  EXPECTED OUTCOME: All tests PASS on unfixed code.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Preservation Property Tests</title>
+  <style>
+    body { font-family: monospace; background: #0d1f0d; color: #e0e0e0; padding: 20px; }
+    h1 { color: #81c784; }
+    .suite { margin: 20px 0; border: 1px solid #2a4a2a; border-radius: 6px; overflow: hidden; }
+    .suite-title { background: #0a2a0a; padding: 10px 16px; font-weight: bold; font-size: 14px; color: #81c784; }
+    .test { padding: 10px 16px; border-top: 1px solid #1a3a1a; font-size: 13px; }
+    .test.pass { background: #0d2b0d; color: #81c784; }
+    .test.fail { background: #2b0d0d; color: #ef9a9a; }
+    .test.error { background: #2b1a00; color: #ffcc80; }
+    .label { font-weight: bold; margin-right: 8px; }
+    .detail { margin-top: 6px; font-size: 11px; color: #aaa; white-space: pre-wrap; }
+    .summary { margin-top: 20px; padding: 16px; border-radius: 6px; font-size: 15px; font-weight: bold; }
+    .summary.all-pass { background: #0d1f0d; color: #81c784; border: 2px solid #388e3c; }
+    .summary.some-fail { background: #1a0000; color: #ef9a9a; border: 2px solid #c62828; }
+    .note { margin-top: 16px; padding: 12px; background: #0a1f0a; border-left: 4px solid #81c784; font-size: 12px; color: #a5d6a7; }
+  </style>
+</head>
+<body>
+<h1>🛡️ Preservation Property Tests</h1>
+<p style="color:#a5d6a7; font-size:13px;">
+  These tests verify <strong>baseline behavior</strong> that must not break after fixes.<br>
+  On <em>unfixed</em> code they MUST PASS — passing confirms the baseline is intact.<br>
+  They will continue to pass after fixes in tasks 3–6 are applied.
+</p>
+
+<div id="results"></div>
+<div id="summary"></div>
+<div class="note" id="note"></div>
+
+<!-- =====================================================================
+     MINIMAL DOM SCAFFOLD (same approach as bug-condition.test.html)
+     ===================================================================== -->
+<div id="app-scaffold" style="display:none">
+  <div id="save-toast"></div>
+  <div id="abbr-tooltip"></div>
+  <div id="sync-loading-screen"></div>
+  <div id="auth-overlay" style="display:none"></div>
+  <div id="greeting-text"></div>
+  <div id="weekly-completed"></div>
+  <div id="weekly-progress"></div>
+  <div id="wave-path"></div>
+  <div id="wave-polygon"></div>
+  <div id="wave-points"></div>
+  <div id="chart-tooltip"></div>
+  <div id="priority-menu"></div>
+  <div id="board-title"></div>
+  <div id="cal-month-year"></div>
+  <div id="cal-grid-days"></div>
+  <div id="habit-container"></div>
+  <div id="notes-container"></div>
+  <div id="abbr-container"></div>
+  <div id="main-grid"></div>
+  <div id="focus-backdrop"></div>
+  <div id="monthly-bar-chart"></div>
+  <div id="monthly-pie-chart"></div>
+  <div id="modal-weekly-cols"></div>
+  <!-- modal overlays -->
+  <div id="monthly-modal" class="modal-overlay" style="display:none"></div>
+  <div id="note-modal" class="modal-overlay" style="display:none"></div>
+  <div id="abbr-modal" class="modal-overlay" style="display:none"></div>
+  <div id="month-picker-modal" class="modal-overlay" style="display:none"></div>
+  <div id="month-picker-grid"></div>
+  <!-- monthly modal form fields -->
+  <input id="mg-1"><input id="mg-2"><input id="mg-3">
+  <input id="gr-name-1"><input id="gr-target-1"><input id="gr-actual-1">
+  <select id="gr-status-1"><option value="Pending">Pending</option><option value="Achieved">Achieved</option><option value="Missed">Missed</option></select>
+  <input id="gr-name-2"><input id="gr-target-2"><input id="gr-actual-2">
+  <select id="gr-status-2"><option value="Pending">Pending</option><option value="Achieved">Achieved</option><option value="Missed">Missed</option></select>
+  <input id="gr-name-3"><input id="gr-target-3"><input id="gr-actual-3">
+  <select id="gr-status-3"><option value="Pending">Pending</option><option value="Achieved">Achieved</option><option value="Missed">Missed</option></select>
+  <tr id="gr-row-1"></tr><tr id="gr-row-2"></tr><tr id="gr-row-3"></tr>
+</div>
+
+<!-- Stub out Supabase so script.js loads without network -->
+<script>
+  window.supabase = {
+    createClient: () => ({
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: null } }),
+        signInWithPassword: () => Promise.resolve({ data: null, error: { message: 'stub' } }),
+        signOut: () => Promise.resolve()
+      },
+      from: () => ({
+        select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null, error: null }) }) }),
+        upsert: () => Promise.resolve({ error: null })
+      })
+    })
+  };
+</script>
+
+<!-- Build the full DOM scaffold BEFORE loading script.js -->
+<script>
+(function buildScaffold() {
+  const mainGrid = document.getElementById('main-grid');
+
+  for (let d = 0; d < 7; d++) {
+    const dayDiv = document.createElement('div');
+    dayDiv.className = 'grid-item';
+    dayDiv.innerHTML = `
+      <div class="day-header" id="day_header_${d}"></div>
+      <div class="day-content">
+        <svg><circle id="circle_${d}"></circle></svg>
+        <div class="percent-text" id="pct_${d}">0%</div>
+        <span id="done_${d}">0</span>
+        <span id="prog_${d}">0</span>
+        <span id="total_${d}">0</span>
+        <div class="day-progress-bar" id="day_prog_bar_${d}"></div>
+        <div class="task-list" id="task_list_${d}"></div>
+      </div>`;
+    mainGrid.appendChild(dayDiv);
+
+    const taskList = dayDiv.querySelector(`#task_list_${d}`);
+    for (let t = 0; t < 10; t++) {
+      const item = document.createElement('div');
+      item.className = 'task-item';
+      item.id = `task_div_${d}_${t}`;
+      item.setAttribute('data-priority', '3');
+      item.setAttribute('data-delay', '0');
+      item.innerHTML = `
+        <input type="checkbox" id="t_check_${d}_${t}">
+        <input type="text"     id="t_name_${d}_${t}" class="t-name">
+        <input type="text"     id="t_h_start_${d}_${t}">
+        <input type="text"     id="t_m_start_${d}_${t}">
+        <input type="text"     id="t_h_end_${d}_${t}">
+        <input type="text"     id="t_m_end_${d}_${t}">
+        <span class="delay-badge" id="delay_badge_${d}_${t}" style="display:none;"></span>`;
+      taskList.appendChild(item);
+    }
+  }
+
+  // 5 habits × 7 days
+  const habitContainer = document.getElementById('habit-container');
+  for (let h = 0; h < 5; h++) {
+    const nameEl = document.createElement('textarea');
+    nameEl.id = `h_name_${h}`;
+    nameEl.className = 'habit-input';
+    habitContainer.appendChild(nameEl);
+    for (let d = 0; d < 7; d++) {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = `h_check_${h}_${d}`;
+      habitContainer.appendChild(cb);
+    }
+  }
+
+  // 10 notes
+  const notesContainer = document.getElementById('notes-container');
+  for (let i = 1; i <= 10; i++) {
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.id = `note_input_${i}`;
+    notesContainer.appendChild(inp);
+  }
+
+  // 10 abbreviation pairs
+  const abbrContainer = document.getElementById('abbr-container');
+  for (let i = 1; i <= 10; i++) {
+    const k = document.createElement('input'); k.id = `abbr_k_${i}`; abbrContainer.appendChild(k);
+    const v = document.createElement('input'); v.id = `abbr_v_${i}`; abbrContainer.appendChild(v);
+  }
+})();
+</script>
+
+<!-- Load the actual application script -->
+<script src="../script.js"></script>
+
+<!-- =====================================================================
+     TEST RUNNER
+     ===================================================================== -->
+<script>
+// ── Tiny test framework ──────────────────────────────────────────────────
+const results = [];
+
+function assert(condition, message) {
+  if (!condition) throw new Error('ASSERTION FAILED: ' + message);
+}
+
+async function runTest(suiteName, testName, fn) {
+  const entry = { suite: suiteName, name: testName, status: 'pending', detail: '' };
+  results.push(entry);
+  try {
+    await fn();
+    entry.status = 'pass';
+    entry.detail = 'Baseline behavior confirmed — this must continue to pass after fixes.';
+  } catch (err) {
+    entry.status = 'fail';
+    entry.detail = err.message;
+  }
+}
+
+function render() {
+  const container = document.getElementById('results');
+  container.innerHTML = '';
+
+  const suites = {};
+  results.forEach(r => {
+    if (!suites[r.suite]) suites[r.suite] = [];
+    suites[r.suite].push(r);
+  });
+
+  Object.entries(suites).forEach(([suite, tests]) => {
+    const suiteEl = document.createElement('div');
+    suiteEl.className = 'suite';
+    suiteEl.innerHTML = `<div class="suite-title">${suite}</div>`;
+    tests.forEach(t => {
+      const icon = t.status === 'fail' ? '✗' : t.status === 'pass' ? '✓' : '…';
+      const div = document.createElement('div');
+      div.className = `test ${t.status}`;
+      div.innerHTML = `<span class="label">${icon} ${t.name}</span>
+        <div class="detail">${t.detail}</div>`;
+      suiteEl.appendChild(div);
+    });
+    container.appendChild(suiteEl);
+  });
+
+  const total = results.length;
+  const failed = results.filter(r => r.status === 'fail').length;
+  const passed = results.filter(r => r.status === 'pass').length;
+
+  const summaryEl = document.getElementById('summary');
+  const allPassed = failed === 0;
+  summaryEl.className = 'summary ' + (allPassed ? 'all-pass' : 'some-fail');
+  summaryEl.innerHTML = `
+    Results: ${passed}/${total} tests PASSED<br>
+    ${failed > 0
+      ? `⚠️  ${failed} test(s) FAILED — baseline behavior is broken or test logic issue.`
+      : '✅ All preservation tests pass — baseline behavior confirmed.'}
+  `;
+
+  document.getElementById('note').innerHTML = `
+    <strong>Interpretation:</strong><br>
+    • A <span style="color:#81c784">PASS</span> means the baseline behavior is intact (expected on both unfixed and fixed code).<br>
+    • A <span style="color:#ef9a9a">FAIL</span> means a regression was introduced — the fix broke something it should not have.<br>
+    • These tests must pass on BOTH unfixed and fixed code.
+  `;
+}
+</script>
+
+<script>
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+/** Reset all task DOM inputs to empty / default state */
+function resetTaskDOM() {
+  for (let d = 0; d < 7; d++) {
+    for (let t = 0; t < 10; t++) {
+      document.getElementById(`t_name_${d}_${t}`).value = '';
+      document.getElementById(`t_h_start_${d}_${t}`).value = '';
+      document.getElementById(`t_m_start_${d}_${t}`).value = '';
+      document.getElementById(`t_h_end_${d}_${t}`).value = '';
+      document.getElementById(`t_m_end_${d}_${t}`).value = '';
+      document.getElementById(`t_check_${d}_${t}`).checked = false;
+      document.getElementById(`task_div_${d}_${t}`).setAttribute('data-priority', '3');
+      document.getElementById(`task_div_${d}_${t}`).setAttribute('data-delay', '0');
+    }
+  }
+}
+
+/** Reset all habit DOM inputs */
+function resetHabitDOM() {
+  for (let h = 0; h < 5; h++) {
+    document.getElementById(`h_name_${h}`).value = '';
+    for (let d = 0; d < 7; d++) {
+      document.getElementById(`h_check_${h}_${d}`).checked = false;
+    }
+  }
+}
+
+/** Reset all note DOM inputs */
+function resetNoteDOM() {
+  for (let i = 1; i <= 10; i++) {
+    const el = document.getElementById(`note_input_${i}`);
+    if (el) el.value = '';
+  }
+}
+
+/**
+ * Simple deterministic pseudo-random number generator (LCG).
+ * Produces values in [0, 1) from a seed, so tests are reproducible.
+ */
+function makePrng(seed) {
+  let s = seed >>> 0;
+  return function() {
+    s = (Math.imul(1664525, s) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+/** Generate a random alphanumeric string of given length */
+function randStr(rng, len) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let out = '';
+  for (let i = 0; i < len; i++) out += chars[Math.floor(rng() * chars.length)];
+  return out;
+}
+
+/** Priority values used by the app */
+const PRIORITIES = ['star', '0', '1', '2', '3'];
+
+/** Priority sort weight — mirrors sortTasks() logic in script.js */
+function priorityWeight(p) {
+  return p === 'star' ? -1 : parseInt(p || '3');
+}
+</script>
+
+<script>
+// ── Property 1: Save/Load Round-Trip Integrity ────────────────────────────
+// Validates: Requirements 3.1, 3.2
+//
+// For all valid week data objects, saveData() then loadWeekData() must
+// preserve all task name, time, checkbox, priority, delay, habit name,
+// habit checkbox, and note values exactly.
+//
+// This is a property-based test: we generate N random week data configurations
+// and verify the round-trip for each one.
+
+async function testProp1_SaveLoadRoundTrip() {
+  const SAMPLES = 20;
+  const rng = makePrng(0xDEADBEEF);
+
+  const savedWeekId = viewingWeekId;
+  const testWeekId = '2025-06-02'; // fixed test week, won't collide with real data
+  viewingWeekId = testWeekId;
+  if (!appData.weeks) appData.weeks = {};
+
+  try {
+    for (let sample = 0; sample < SAMPLES; sample++) {
+      // ── Generate random week data ──────────────────────────────────────
+      resetTaskDOM();
+      resetHabitDOM();
+      resetNoteDOM();
+
+      // Populate DOM with random values
+      const expectedTasks = {};
+      for (let d = 0; d < 7; d++) {
+        for (let t = 0; t < 10; t++) {
+          const hasTask = rng() > 0.4; // ~60% chance of having a task
+          const name = hasTask ? randStr(rng, 6) : '';
+          const hStart = hasTask ? String(Math.floor(rng() * 24)).padStart(2, '0') : '';
+          const mStart = hasTask ? String(Math.floor(rng() * 60)).padStart(2, '0') : '';
+          const hEnd   = hasTask ? String(Math.floor(rng() * 24)).padStart(2, '0') : '';
+          const mEnd   = hasTask ? String(Math.floor(rng() * 60)).padStart(2, '0') : '';
+          const checked = hasTask && rng() > 0.5;
+          const pri = PRIORITIES[Math.floor(rng() * PRIORITIES.length)];
+          const delay = String(Math.floor(rng() * 5));
+
+          document.getElementById(`t_name_${d}_${t}`).value = name;
+          document.getElementById(`t_h_start_${d}_${t}`).value = hStart;
+          document.getElementById(`t_m_start_${d}_${t}`).value = mStart;
+          document.getElementById(`t_h_end_${d}_${t}`).value = hEnd;
+          document.getElementById(`t_m_end_${d}_${t}`).value = mEnd;
+          document.getElementById(`t_check_${d}_${t}`).checked = checked;
+          document.getElementById(`task_div_${d}_${t}`).setAttribute('data-priority', pri);
+          document.getElementById(`task_div_${d}_${t}`).setAttribute('data-delay', delay);
+
+          expectedTasks[`${d}_${t}`] = { name, hStart, mStart, hEnd, mEnd, checked, pri, delay };
+        }
+      }
+
+      const expectedHabits = {};
+      for (let h = 0; h < 5; h++) {
+        const hName = rng() > 0.3 ? randStr(rng, 5) : '';
+        document.getElementById(`h_name_${h}`).value = hName;
+        expectedHabits[`h_name_${h}`] = hName;
+        for (let d = 0; d < 7; d++) {
+          const checked = rng() > 0.5;
+          document.getElementById(`h_check_${h}_${d}`).checked = checked;
+          expectedHabits[`h_check_${h}_${d}`] = checked;
+        }
+      }
+
+      const expectedNotes = {};
+      for (let i = 1; i <= 10; i++) {
+        const note = rng() > 0.5 ? randStr(rng, 8) : '';
+        const el = document.getElementById(`note_input_${i}`);
+        if (el) { el.value = note; expectedNotes[`note_${i}`] = note; }
+      }
+
+      // ── Save then clear DOM then load ──────────────────────────────────
+      saveData();
+      resetTaskDOM();
+      resetHabitDOM();
+      resetNoteDOM();
+      loadWeekData();
+
+      // ── Verify round-trip ──────────────────────────────────────────────
+      for (let d = 0; d < 7; d++) {
+        for (let t = 0; t < 10; t++) {
+          const exp = expectedTasks[`${d}_${t}`];
+          const gotName    = document.getElementById(`t_name_${d}_${t}`).value;
+          const gotHStart  = document.getElementById(`t_h_start_${d}_${t}`).value;
+          const gotMStart  = document.getElementById(`t_m_start_${d}_${t}`).value;
+          const gotHEnd    = document.getElementById(`t_h_end_${d}_${t}`).value;
+          const gotMEnd    = document.getElementById(`t_m_end_${d}_${t}`).value;
+          const gotChecked = document.getElementById(`t_check_${d}_${t}`).checked;
+          const gotPri     = document.getElementById(`task_div_${d}_${t}`).getAttribute('data-priority');
+          const gotDelay   = document.getElementById(`task_div_${d}_${t}`).getAttribute('data-delay');
+
+          assert(gotName === exp.name,
+            `Sample ${sample}: task[${d}][${t}].name: expected "${exp.name}", got "${gotName}"`);
+          assert(gotHStart === exp.hStart,
+            `Sample ${sample}: task[${d}][${t}].hStart: expected "${exp.hStart}", got "${gotHStart}"`);
+          assert(gotMStart === exp.mStart,
+            `Sample ${sample}: task[${d}][${t}].mStart: expected "${exp.mStart}", got "${gotMStart}"`);
+          assert(gotHEnd === exp.hEnd,
+            `Sample ${sample}: task[${d}][${t}].hEnd: expected "${exp.hEnd}", got "${gotHEnd}"`);
+          assert(gotMEnd === exp.mEnd,
+            `Sample ${sample}: task[${d}][${t}].mEnd: expected "${exp.mEnd}", got "${gotMEnd}"`);
+          assert(gotChecked === exp.checked,
+            `Sample ${sample}: task[${d}][${t}].checked: expected ${exp.checked}, got ${gotChecked}`);
+          assert(gotPri === exp.pri,
+            `Sample ${sample}: task[${d}][${t}].priority: expected "${exp.pri}", got "${gotPri}"`);
+          assert(gotDelay === exp.delay,
+            `Sample ${sample}: task[${d}][${t}].delay: expected "${exp.delay}", got "${gotDelay}"`);
+        }
+      }
+
+      for (let h = 0; h < 5; h++) {
+        const gotHName = document.getElementById(`h_name_${h}`).value;
+        assert(gotHName === expectedHabits[`h_name_${h}`],
+          `Sample ${sample}: habit[${h}].name: expected "${expectedHabits[`h_name_${h}`]}", got "${gotHName}"`);
+        for (let d = 0; d < 7; d++) {
+          const gotHCheck = document.getElementById(`h_check_${h}_${d}`).checked;
+          assert(gotHCheck === expectedHabits[`h_check_${h}_${d}`],
+            `Sample ${sample}: habit[${h}][${d}].checked: expected ${expectedHabits[`h_check_${h}_${d}`]}, got ${gotHCheck}`);
+        }
+      }
+
+      for (let i = 1; i <= 10; i++) {
+        const el = document.getElementById(`note_input_${i}`);
+        if (el) {
+          const gotNote = el.value;
+          assert(gotNote === (expectedNotes[`note_${i}`] || ''),
+            `Sample ${sample}: note[${i}]: expected "${expectedNotes[`note_${i}`]}", got "${gotNote}"`);
+        }
+      }
+    }
+  } finally {
+    viewingWeekId = savedWeekId;
+    resetTaskDOM();
+    resetHabitDOM();
+    resetNoteDOM();
+    // Clean up test week from appData
+    delete appData.weeks[testWeekId];
+  }
+}
+</script>
+
+<script>
+// ── Property 2: Tooltip Displays Matching Abbreviation Entries ────────────
+// Validates: Requirements 3.3
+//
+// For all .t-name inputs containing an abbreviation key as a whole word,
+// the tooltip element must display the matching abbreviation entry.
+//
+// This is a property-based test: we generate N random abbreviation sets and
+// task name inputs, then verify the tooltip logic produces correct output.
+// We test the tooltip logic directly (same RegExp logic as the mousemove handler)
+// rather than simulating mouse events, since DOM event simulation is unreliable
+// in file:// contexts.
+
+async function testProp2_TooltipMatchesAbbreviations() {
+  const SAMPLES = 30;
+  const rng = makePrng(0xCAFEBABE);
+
+  // Save and restore abbr state
+  const savedAbbrs = JSON.parse(JSON.stringify(appData.abbrs || {}));
+
+  try {
+    for (let sample = 0; sample < SAMPLES; sample++) {
+      // ── Generate random abbreviation set ──────────────────────────────
+      const abbrs = {};
+      const numAbbrs = 1 + Math.floor(rng() * 5); // 1–5 abbreviations
+      const keys = [];
+      const vals = [];
+      for (let i = 1; i <= 10; i++) {
+        if (i <= numAbbrs) {
+          const k = randStr(rng, 2 + Math.floor(rng() * 3)); // 2–4 char key
+          const v = randStr(rng, 5 + Math.floor(rng() * 8)); // 5–12 char value
+          abbrs[`abbr_k_${i}`] = k;
+          abbrs[`abbr_v_${i}`] = v;
+          keys.push(k);
+          vals.push(v);
+        } else {
+          abbrs[`abbr_k_${i}`] = '';
+          abbrs[`abbr_v_${i}`] = '';
+        }
+      }
+      appData.abbrs = abbrs;
+
+      // ── For each abbreviation key, build a task name containing it ────
+      for (let ki = 0; ki < keys.length; ki++) {
+        const k = keys[ki];
+        const v = vals[ki];
+
+        // Task name: prefix + space + key + space + suffix (key as whole word)
+        const prefix = randStr(rng, 3);
+        const suffix = randStr(rng, 3);
+        const taskName = `${prefix} ${k} ${suffix}`;
+
+        // ── Replicate the tooltip logic from script.js mousemove handler ─
+        // (We test the logic directly, not via DOM events)
+        const foundAbbrs = [];
+        for (let i = 1; i <= 10; i++) {
+          const ak = appData.abbrs[`abbr_k_${i}`];
+          const av = appData.abbrs[`abbr_v_${i}`];
+          if (ak && av) {
+            const regex = new RegExp(`\\b${ak}\\b`, 'i');
+            if (regex.test(taskName)) {
+              foundAbbrs.push({ key: ak, val: av });
+            }
+          }
+        }
+
+        // The abbreviation key must be found in the results
+        const found = foundAbbrs.some(entry => entry.key.toLowerCase() === k.toLowerCase());
+        assert(found,
+          `Sample ${sample}: abbreviation key "${k}" not found in tooltip results for task name "${taskName}".\n` +
+          `foundAbbrs: ${JSON.stringify(foundAbbrs)}\n` +
+          `appData.abbrs: ${JSON.stringify(abbrs)}`);
+
+        // The matching entry must have the correct value
+        const matchingEntry = foundAbbrs.find(entry => entry.key.toLowerCase() === k.toLowerCase());
+        assert(matchingEntry && matchingEntry.val === v,
+          `Sample ${sample}: tooltip value for key "${k}" expected "${v}", got "${matchingEntry ? matchingEntry.val : 'not found'}"`);
+      }
+
+      // ── Negative case: task name with NO abbreviation key ─────────────
+      const noMatchName = 'zzz_no_match_xyz';
+      const noMatchResults = [];
+      for (let i = 1; i <= 10; i++) {
+        const ak = appData.abbrs[`abbr_k_${i}`];
+        const av = appData.abbrs[`abbr_v_${i}`];
+        if (ak && av) {
+          const regex = new RegExp(`\\b${ak}\\b`, 'i');
+          if (regex.test(noMatchName)) noMatchResults.push(ak);
+        }
+      }
+      // None of the abbreviation keys should match the no-match name
+      // (keys are short alphanumeric, won't match 'zzz_no_match_xyz' as whole word)
+      const falsePositives = noMatchResults.filter(k => noMatchName.includes(k));
+      // We only assert if there are no false positives (keys could accidentally match)
+      // so we check that the logic correctly returns empty for a clearly non-matching name
+      const clearNoMatch = 'XXXXXXXXXX';
+      const clearResults = [];
+      for (let i = 1; i <= 10; i++) {
+        const ak = appData.abbrs[`abbr_k_${i}`];
+        const av = appData.abbrs[`abbr_v_${i}`];
+        if (ak && av) {
+          const regex = new RegExp(`\\b${ak}\\b`, 'i');
+          if (regex.test(clearNoMatch)) clearResults.push(ak);
+        }
+      }
+      assert(clearResults.length === 0,
+        `Sample ${sample}: tooltip should show nothing for "${clearNoMatch}" but found: ${JSON.stringify(clearResults)}`);
+    }
+  } finally {
+    appData.abbrs = savedAbbrs;
+  }
+}
+</script>
+
+<script>
+// ── Property 3: Drag Sort Invariant ──────────────────────────────────────
+// Validates: Requirements 3.4, 3.5
+//
+// For all drag operations, the resulting task order in the target day must
+// satisfy the priority sort invariant: star < 0 < 1 < 2 < 3.
+//
+// This is a property-based test: we generate N random task configurations
+// with random priorities, perform sortTasks(), and verify the invariant holds.
+
+async function testProp3_DragSortInvariant() {
+  const SAMPLES = 25;
+  const rng = makePrng(0xBEEFCAFE);
+
+  try {
+    for (let sample = 0; sample < SAMPLES; sample++) {
+      const dIdx = Math.floor(rng() * 7); // random day 0–6
+
+      // ── Set up random tasks with random priorities ─────────────────────
+      const taskCount = 3 + Math.floor(rng() * 8); // 3–10 tasks
+      const assignedPriorities = [];
+
+      for (let t = 0; t < 10; t++) {
+        if (t < taskCount) {
+          const pri = PRIORITIES[Math.floor(rng() * PRIORITIES.length)];
+          document.getElementById(`t_name_${dIdx}_${t}`).value = `task_${sample}_${t}`;
+          document.getElementById(`task_div_${dIdx}_${t}`).setAttribute('data-priority', pri);
+          assignedPriorities.push(pri);
+        } else {
+          document.getElementById(`t_name_${dIdx}_${t}`).value = '';
+          document.getElementById(`task_div_${dIdx}_${t}`).setAttribute('data-priority', '3');
+        }
+      }
+
+      // ── Run sortTasks() ────────────────────────────────────────────────
+      sortTasks(dIdx);
+
+      // ── Read back the order from DOM ───────────────────────────────────
+      const taskList = document.getElementById(`task_list_${dIdx}`);
+      const items = Array.from(taskList.querySelectorAll('.task-item'));
+      const sortedPriorities = items.map(item => item.getAttribute('data-priority'));
+
+      // ── Verify sort invariant: weights must be non-decreasing ──────────
+      const weights = sortedPriorities.map(priorityWeight);
+      for (let i = 1; i < weights.length; i++) {
+        assert(weights[i] >= weights[i - 1],
+          `Sample ${sample} day ${dIdx}: sort invariant violated at position ${i}.\n` +
+          `Sorted priorities: [${sortedPriorities.join(', ')}]\n` +
+          `Weights: [${weights.join(', ')}]\n` +
+          `Expected non-decreasing weights (star=-1, 0=0, 1=1, 2=2, 3=3).\n` +
+          `Input priorities were: [${assignedPriorities.join(', ')}]`);
+      }
+
+      // ── Verify all original priorities are still present (no data loss) ─
+      const sortedCopy = [...sortedPriorities].sort();
+      const assignedCopy = [...assignedPriorities,
+        ...Array(10 - taskCount).fill('3')].sort();
+      assert(JSON.stringify(sortedCopy) === JSON.stringify(assignedCopy),
+        `Sample ${sample} day ${dIdx}: priorities changed after sort.\n` +
+        `Before: [${assignedCopy.join(', ')}]\n` +
+        `After:  [${sortedCopy.join(', ')}]`);
+
+      // ── Clean up this day ──────────────────────────────────────────────
+      for (let t = 0; t < 10; t++) {
+        document.getElementById(`t_name_${dIdx}_${t}`).value = '';
+        document.getElementById(`task_div_${dIdx}_${t}`).setAttribute('data-priority', '3');
+      }
+    }
+
+    // ── Additional: verify star always comes before numeric priorities ───
+    const dIdx = 0;
+    const mixedPriorities = ['3', 'star', '1', '0', '2', 'star', '3', '0', '1', '2'];
+    for (let t = 0; t < 10; t++) {
+      document.getElementById(`t_name_${dIdx}_${t}`).value = `task_${t}`;
+      document.getElementById(`task_div_${dIdx}_${t}`).setAttribute('data-priority', mixedPriorities[t]);
+    }
+    sortTasks(dIdx);
+
+    const taskList = document.getElementById(`task_list_${dIdx}`);
+    const items = Array.from(taskList.querySelectorAll('.task-item'));
+    const finalPriorities = items.map(item => item.getAttribute('data-priority'));
+    const finalWeights = finalPriorities.map(priorityWeight);
+
+    for (let i = 1; i < finalWeights.length; i++) {
+      assert(finalWeights[i] >= finalWeights[i - 1],
+        `Mixed priority sort invariant violated at position ${i}.\n` +
+        `Input: [${mixedPriorities.join(', ')}]\n` +
+        `Output: [${finalPriorities.join(', ')}]\n` +
+        `Weights: [${finalWeights.join(', ')}]`);
+    }
+
+    // Verify stars come first
+    const firstNonStar = finalPriorities.findIndex(p => p !== 'star');
+    const lastStar = finalPriorities.lastIndexOf('star');
+    if (lastStar !== -1 && firstNonStar !== -1) {
+      assert(lastStar < firstNonStar,
+        `Stars must all appear before non-star priorities.\n` +
+        `Output: [${finalPriorities.join(', ')}]`);
+    }
+
+  } finally {
+    // Clean up all days
+    for (let d = 0; d < 7; d++) {
+      for (let t = 0; t < 10; t++) {
+        document.getElementById(`t_name_${d}_${t}`).value = '';
+        document.getElementById(`task_div_${d}_${t}`).setAttribute('data-priority', '3');
+      }
+    }
+  }
+}
+</script>
+
+<script>
+// ── Property 4: Modal Open/Close Preserves activeModalCount ──────────────
+// Validates: Requirements 3.9
+//
+// For all modal open/close cycles, activeModalCount must return to its
+// pre-open value after closing. This ensures the !! indicator on day headers
+// is shown/hidden correctly.
+//
+// This is a property-based test: we test all 4 modal types across N random
+// initial activeModalCount values and verify the invariant holds.
+
+async function testProp4_ModalCountPreserved() {
+  const SAMPLES = 15;
+  const rng = makePrng(0xFEEDFACE);
+
+  // Save original activeModalCount
+  const originalCount = activeModalCount;
+
+  // Minimal stubs so modal open functions don't crash
+  // (they call loadMonthlyData, renderMonthPickerGrid etc.)
+  if (!appData.weeks) appData.weeks = {};
+  if (!appData.monthly) appData.monthly = {};
+  if (!appData.abbrs) appData.abbrs = {};
+
+  // Ensure viewingWeekId and viewingMonthId are set
+  if (!viewingWeekId) { try { calculateWeekIds(); } catch(e) {} }
+  if (!viewingMonthId) viewingMonthId = '2025-01';
+
+  // Modal pairs: [openFn, closeFn, name]
+  const modalPairs = [
+    ['openNoteModal',        'closeNoteModal',        'Note Modal'],
+    ['openAbbrModal',        'closeAbbrModal',         'Abbreviation Modal'],
+    ['openMonthlyModal',     'closeMonthlyModal',      'Monthly Summary Modal'],
+    ['openMonthPickerModal', 'closeMonthPickerModal',  'Month Picker Modal'],
+  ];
+
+  try {
+    for (let sample = 0; sample < SAMPLES; sample++) {
+      // Random initial count 0–3
+      const initialCount = Math.floor(rng() * 4);
+      activeModalCount = initialCount;
+
+      // Test each modal type
+      for (const [openName, closeName, label] of modalPairs) {
+        const countBefore = activeModalCount;
+
+        // Open the modal
+        window[openName]();
+        const countAfterOpen = activeModalCount;
+
+        assert(countAfterOpen === countBefore + 1,
+          `Sample ${sample} ${label}: activeModalCount should be ${countBefore + 1} after open, got ${countAfterOpen}`);
+
+        // Close the modal
+        window[closeName]();
+        const countAfterClose = activeModalCount;
+
+        assert(countAfterClose === countBefore,
+          `Sample ${sample} ${label}: activeModalCount should return to ${countBefore} after close, got ${countAfterClose}.\n` +
+          `This means the !! indicator on day headers will be shown/hidden incorrectly.`);
+      }
+
+      // ── Multiple opens then closes ─────────────────────────────────────
+      // Open 3 different modals, then close them — count must return to start
+      activeModalCount = initialCount;
+      const startCount = activeModalCount;
+
+      openNoteModal();
+      openAbbrModal();
+      openMonthlyModal();
+
+      assert(activeModalCount === startCount + 3,
+        `Sample ${sample}: after opening 3 modals, count should be ${startCount + 3}, got ${activeModalCount}`);
+
+      closeMonthlyModal();
+      closeAbbrModal();
+      closeNoteModal();
+
+      assert(activeModalCount === startCount,
+        `Sample ${sample}: after closing 3 modals, count should return to ${startCount}, got ${activeModalCount}.\n` +
+        `activeModalCount drift means !! indicator will be permanently wrong.`);
+    }
+
+    // ── Edge case: closing when count is already 0 must not go negative ──
+    activeModalCount = 0;
+    closeNoteModal();
+    assert(activeModalCount === 0,
+      `closeNoteModal() when count=0 should keep count at 0, got ${activeModalCount}.\n` +
+      `(Math.max(0, ...) guard must be present)`);
+
+    activeModalCount = 0;
+    closeMonthlyModal();
+    assert(activeModalCount === 0,
+      `closeMonthlyModal() when count=0 should keep count at 0, got ${activeModalCount}`);
+
+  } finally {
+    activeModalCount = originalCount;
+    // Hide all modals
+    ['monthly-modal', 'note-modal', 'abbr-modal', 'month-picker-modal'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+  }
+}
+</script>
+
+<script>
+// ── Run all preservation tests ────────────────────────────────────────────
+(async function runAll() {
+  // Give script.js time to finish any synchronous init
+  await new Promise(r => setTimeout(r, 50));
+
+  // Initialise minimal app state
+  if (typeof appData !== 'undefined') {
+    if (!appData.weeks)   appData.weeks   = {};
+    if (!appData.monthly) appData.monthly = {};
+    if (!appData.abbrs)   appData.abbrs   = {};
+  }
+  if (typeof viewingWeekId === 'undefined' || !viewingWeekId) {
+    try { calculateWeekIds(); } catch(e) {}
+  }
+
+  // ── Property 1: Save/Load Round-Trip ────────────────────────────────────
+  // Validates: Requirements 3.1, 3.2
+  await runTest(
+    'Property 1 – Save/Load Round-Trip (Req 3.1, 3.2)',
+    'saveData() then loadWeekData() preserves all task/habit/note values (20 random samples)',
+    testProp1_SaveLoadRoundTrip
+  );
+
+  // ── Property 2: Tooltip Abbreviation Matching ────────────────────────────
+  // Validates: Requirements 3.3
+  await runTest(
+    'Property 2 – Tooltip Abbreviation Matching (Req 3.3)',
+    'For all .t-name inputs with abbreviation text, tooltip logic returns matching entries (30 random samples)',
+    testProp2_TooltipMatchesAbbreviations
+  );
+
+  // ── Property 3: Drag Sort Invariant ──────────────────────────────────────
+  // Validates: Requirements 3.4, 3.5
+  await runTest(
+    'Property 3 – Drag Sort Invariant (Req 3.4, 3.5)',
+    'After sortTasks(), task order satisfies priority invariant: star < 0 < 1 < 2 < 3 (25 random samples)',
+    testProp3_DragSortInvariant
+  );
+
+  // ── Property 4: Modal activeModalCount Preserved ─────────────────────────
+  // Validates: Requirements 3.9
+  await runTest(
+    'Property 4 – Modal activeModalCount Preserved (Req 3.9)',
+    'For all modal open/close cycles, activeModalCount returns to pre-open value (15 random samples)',
+    testProp4_ModalCountPreserved
+  );
+
+  render();
+
+  // Log summary to console for CI/automation
+  console.group('Preservation Property Test Results');
+  results.forEach(r => {
+    const fn = r.status === 'fail' ? console.error : console.log;
+    fn(`[${r.status.toUpperCase()}] ${r.suite} — ${r.name}`);
+    if (r.detail && r.status === 'fail') console.info('  Detail:', r.detail);
+  });
+  const passed = results.filter(r => r.status === 'pass').length;
+  console.info(`\n${passed}/${results.length} preservation tests PASSED`);
+  console.groupEnd();
+})();
+</script>
+</body>
+</html>

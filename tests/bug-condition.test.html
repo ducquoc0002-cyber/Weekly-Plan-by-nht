@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<!--
+  Bug Condition Exploration Tests
+  ================================
+  Task 1 of performance-optimization bugfix spec.
+
+  These tests MUST FAIL on unfixed code — failure confirms the bugs exist.
+  They encode the EXPECTED (fixed) behavior; they will pass after fixes are applied.
+
+  Requirements: 1.1, 1.2, 1.3, 2.1, 2.3, 3.1, 3.2, 4.1, 4.2
+
+  HOW TO RUN:
+    Open this file in a browser (file:// or local server).
+    All 4 bug condition tests will run automatically.
+    Results are shown on-screen and in the browser console.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bug Condition Exploration Tests</title>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
+    h1 { color: #a0c4ff; }
+    .suite { margin: 20px 0; border: 1px solid #333; border-radius: 6px; overflow: hidden; }
+    .suite-title { background: #16213e; padding: 10px 16px; font-weight: bold; font-size: 14px; color: #a0c4ff; }
+    .test { padding: 10px 16px; border-top: 1px solid #222; font-size: 13px; }
+    .test.pass { background: #0d2b0d; color: #81c784; }
+    .test.fail { background: #2b0d0d; color: #ef9a9a; }
+    .test.error { background: #2b1a00; color: #ffcc80; }
+    .label { font-weight: bold; margin-right: 8px; }
+    .detail { margin-top: 6px; font-size: 11px; color: #aaa; white-space: pre-wrap; }
+    .summary { margin-top: 20px; padding: 16px; border-radius: 6px; font-size: 15px; font-weight: bold; }
+    .summary.all-fail { background: #1a0000; color: #ef9a9a; border: 2px solid #c62828; }
+    .summary.some-pass { background: #1a1a00; color: #fff176; border: 2px solid #f9a825; }
+    .note { margin-top: 16px; padding: 12px; background: #0d1b2a; border-left: 4px solid #a0c4ff; font-size: 12px; color: #b0c4de; }
+  </style>
+</head>
+<body>
+<h1>🔬 Bug Condition Exploration Tests</h1>
+<p style="color:#aaa; font-size:13px;">
+  These tests encode <strong>expected (fixed) behavior</strong>.<br>
+  On <em>unfixed</em> code they MUST FAIL — failure proves the bugs exist.<br>
+  They will PASS after the fixes in tasks 3–6 are applied.
+</p>
+
+<div id="results"></div>
+<div id="summary"></div>
+<div class="note" id="note"></div>
+
+<!-- =====================================================================
+     MINIMAL DOM SCAFFOLD
+     We replicate just enough of index.html for the functions under test.
+     ===================================================================== -->
+<div id="app-scaffold" style="display:none">
+  <!-- saveData() reads these 70 task inputs (7 days × 10 tasks) -->
+  <div id="task-scaffold"></div>
+  <!-- habit inputs -->
+  <div id="habit-scaffold"></div>
+  <!-- note inputs -->
+  <div id="note-scaffold"></div>
+  <!-- monthly modal chart containers -->
+  <div id="monthly-bar-chart"></div>
+  <div id="monthly-pie-chart"></div>
+  <div id="modal-weekly-cols"></div>
+  <!-- misc elements referenced by script -->
+  <div id="save-toast"></div>
+  <div id="abbr-tooltip"></div>
+  <div id="sync-loading-screen"></div>
+  <div id="auth-overlay" style="display:none"></div>
+  <div id="greeting-text"></div>
+  <div id="weekly-completed"></div>
+  <div id="weekly-progress"></div>
+  <div id="wave-path"></div>
+  <div id="wave-polygon"></div>
+  <div id="wave-points"></div>
+  <div id="chart-tooltip"></div>
+  <div id="priority-menu"></div>
+  <div id="board-title"></div>
+  <div id="cal-month-year"></div>
+  <div id="cal-grid-days"></div>
+  <div id="habit-container"></div>
+  <div id="notes-container"></div>
+  <div id="abbr-container"></div>
+  <div id="main-grid"></div>
+  <div id="focus-backdrop"></div>
+  <div id="monthly-modal" style="display:none"></div>
+  <div id="note-modal" style="display:none"></div>
+  <div id="abbr-modal" style="display:none"></div>
+  <div id="month-picker-modal" style="display:none"></div>
+  <div id="month-picker-grid"></div>
+  <!-- monthly modal form fields -->
+  <input id="mg-1"><input id="mg-2"><input id="mg-3">
+  <input id="gr-name-1"><input id="gr-target-1"><input id="gr-actual-1">
+  <select id="gr-status-1"><option value="Pending">Pending</option><option value="Achieved">Achieved</option><option value="Missed">Missed</option></select>
+  <input id="gr-name-2"><input id="gr-target-2"><input id="gr-actual-2">
+  <select id="gr-status-2"><option value="Pending">Pending</option><option value="Achieved">Achieved</option><option value="Missed">Missed</option></select>
+  <input id="gr-name-3"><input id="gr-target-3"><input id="gr-actual-3">
+  <select id="gr-status-3"><option value="Pending">Pending</option><option value="Achieved">Achieved</option><option value="Missed">Missed</option></select>
+  <tr id="gr-row-1"></tr><tr id="gr-row-2"></tr><tr id="gr-row-3"></tr>
+</div>
+
+<!-- Stub out Supabase so script.js loads without network -->
+<script>
+  window.supabase = {
+    createClient: () => ({
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: null } }),
+        signInWithPassword: () => Promise.resolve({ data: null, error: { message: 'stub' } }),
+        signOut: () => Promise.resolve()
+      },
+      from: () => ({
+        select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null, error: null }) }) }),
+        upsert: () => Promise.resolve({ error: null })
+      })
+    })
+  };
+</script>
+
+<!-- Build the 70-task + habit + note DOM scaffold BEFORE loading script.js -->
+<script>
+(function buildScaffold() {
+  // 7 days × 10 tasks
+  const taskScaffold = document.getElementById('task-scaffold');
+  const mainGrid = document.getElementById('main-grid');
+
+  // We need the full day grid structure that renderDays() would create,
+  // but we build it manually so script.js functions can find the elements.
+  for (let d = 0; d < 7; d++) {
+    const dayDiv = document.createElement('div');
+    dayDiv.className = 'grid-item';
+    dayDiv.innerHTML = `
+      <div class="day-header" id="day_header_${d}"></div>
+      <div class="day-content">
+        <svg><circle id="circle_${d}"></circle></svg>
+        <div class="percent-text" id="pct_${d}">0%</div>
+        <span id="done_${d}">0</span>
+        <span id="prog_${d}">0</span>
+        <span id="total_${d}">0</span>
+        <div class="day-progress-bar" id="day_prog_bar_${d}"></div>
+        <div class="task-list" id="task_list_${d}">
+        </div>
+      </div>`;
+    mainGrid.appendChild(dayDiv);
+
+    const taskList = dayDiv.querySelector(`#task_list_${d}`);
+    for (let t = 0; t < 10; t++) {
+      const item = document.createElement('div');
+      item.className = 'task-item';
+      item.id = `task_div_${d}_${t}`;
+      item.setAttribute('data-priority', '3');
+      item.setAttribute('data-delay', '0');
+      item.innerHTML = `
+        <input type="checkbox" id="t_check_${d}_${t}">
+        <input type="text"     id="t_name_${d}_${t}"    class="t-name">
+        <input type="text"     id="t_h_start_${d}_${t}">
+        <input type="text"     id="t_m_start_${d}_${t}">
+        <input type="text"     id="t_h_end_${d}_${t}">
+        <input type="text"     id="t_m_end_${d}_${t}">
+        <span class="delay-badge" id="delay_badge_${d}_${t}" style="display:none;"></span>`;
+      taskList.appendChild(item);
+    }
+  }
+
+  // 5 habits × 7 days
+  const habitContainer = document.getElementById('habit-container');
+  for (let h = 0; h < 5; h++) {
+    const nameEl = document.createElement('textarea');
+    nameEl.id = `h_name_${h}`;
+    nameEl.className = 'habit-input';
+    habitContainer.appendChild(nameEl);
+    for (let d = 0; d < 7; d++) {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = `h_check_${h}_${d}`;
+      habitContainer.appendChild(cb);
+    }
+  }
+
+  // 10 notes
+  const notesContainer = document.getElementById('notes-container');
+  for (let i = 1; i <= 10; i++) {
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.id = `note_input_${i}`;
+    notesContainer.appendChild(inp);
+  }
+
+  // 10 abbreviation pairs
+  const abbrContainer = document.getElementById('abbr-container');
+  for (let i = 1; i <= 10; i++) {
+    const k = document.createElement('input'); k.id = `abbr_k_${i}`; abbrContainer.appendChild(k);
+    const v = document.createElement('input'); v.id = `abbr_v_${i}`; abbrContainer.appendChild(v);
+  }
+})();
+</script>
+
+<!-- Load the actual application script -->
+<script src="../script.js"></script>
+
+<!-- =====================================================================
+     TEST RUNNER
+     ===================================================================== -->
+<script>
+// ── Tiny test framework ──────────────────────────────────────────────────
+const results = [];
+
+function assert(condition, message) {
+  if (!condition) throw new Error('ASSERTION FAILED: ' + message);
+}
+
+async function runTest(suiteName, testName, fn) {
+  const entry = { suite: suiteName, name: testName, status: 'pending', detail: '' };
+  results.push(entry);
+  try {
+    await fn();
+    entry.status = 'pass';
+    entry.detail = 'Test passed (unexpected on unfixed code — bug may already be fixed here)';
+  } catch (err) {
+    entry.status = 'fail';
+    entry.detail = err.message;
+  }
+}
+
+function render() {
+  const container = document.getElementById('results');
+  container.innerHTML = '';
+
+  const suites = {};
+  results.forEach(r => {
+    if (!suites[r.suite]) suites[r.suite] = [];
+    suites[r.suite].push(r);
+  });
+
+  Object.entries(suites).forEach(([suite, tests]) => {
+    const suiteEl = document.createElement('div');
+    suiteEl.className = 'suite';
+    suiteEl.innerHTML = `<div class="suite-title">${suite}</div>`;
+    tests.forEach(t => {
+      const icon = t.status === 'fail' ? '✗' : t.status === 'pass' ? '✓' : '…';
+      const div = document.createElement('div');
+      div.className = `test ${t.status}`;
+      div.innerHTML = `<span class="label">${icon} ${t.name}</span>
+        <div class="detail">${t.detail}</div>`;
+      suiteEl.appendChild(div);
+    });
+    container.appendChild(suiteEl);
+  });
+
+  const total = results.length;
+  const failed = results.filter(r => r.status === 'fail').length;
+  const passed = results.filter(r => r.status === 'pass').length;
+
+  const summaryEl = document.getElementById('summary');
+  const allFailed = failed === total;
+  summaryEl.className = 'summary ' + (allFailed ? 'all-fail' : 'some-pass');
+  summaryEl.innerHTML = `
+    Results: ${failed}/${total} tests FAILED (expected on unfixed code)<br>
+    ${passed > 0 ? `⚠️  ${passed} test(s) passed unexpectedly — those bugs may already be fixed.` : '✅ All tests failed as expected — all 4 bugs confirmed present.'}
+  `;
+
+  document.getElementById('note').innerHTML = `
+    <strong>Interpretation:</strong><br>
+    • A <span style="color:#ef9a9a">FAIL</span> means the bug is confirmed present in the current code.<br>
+    • A <span style="color:#81c784">PASS</span> means that bug condition is NOT present (already fixed or test logic issue).<br>
+    • After applying fixes in tasks 3–6, re-run this file — all tests should PASS.
+  `;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+/** Reset all task inputs to empty / default state */
+function resetTaskDOM() {
+  for (let d = 0; d < 7; d++) {
+    for (let t = 0; t < 10; t++) {
+      document.getElementById(`t_name_${d}_${t}`).value = '';
+      document.getElementById(`t_h_start_${d}_${t}`).value = '';
+      document.getElementById(`t_m_start_${d}_${t}`).value = '';
+      document.getElementById(`t_h_end_${d}_${t}`).value = '';
+      document.getElementById(`t_m_end_${d}_${t}`).value = '';
+      document.getElementById(`t_check_${d}_${t}`).checked = false;
+      document.getElementById(`task_div_${d}_${t}`).setAttribute('data-priority', '3');
+      document.getElementById(`task_div_${d}_${t}`).setAttribute('data-delay', '0');
+    }
+  }
+}
+
+// ── Bug 1: DOM-Driven Save Bottleneck ────────────────────────────────────
+// Validates: Requirements 1.1, 1.2, 1.3, 2.3
+//
+// saveData() currently scans 70+ DOM nodes synchronously.
+// Expected (fixed) behavior: saveData() reads from in-memory state and
+// completes in < 16ms (one frame budget).
+//
+// On UNFIXED code this FAILS because DOM scan of 70+ elements takes > 16ms.
+
+async function testBug1_SaveDataTiming() {
+  // Ensure appData and viewingWeekId are initialised
+  if (typeof appData === 'undefined' || typeof viewingWeekId === 'undefined') {
+    throw new Error('appData or viewingWeekId not initialised — script.js may not have loaded correctly');
+  }
+
+  // Populate some task data so saveData() has real work to do
+  for (let d = 0; d < 7; d++) {
+    for (let t = 0; t < 10; t++) {
+      document.getElementById(`t_name_${d}_${t}`).value = `Task ${d}-${t}`;
+    }
+  }
+
+  // Measure saveData() execution time
+  const RUNS = 5;
+  let totalMs = 0;
+  for (let i = 0; i < RUNS; i++) {
+    const t0 = performance.now();
+    saveData();
+    totalMs += performance.now() - t0;
+  }
+  const avgMs = totalMs / RUNS;
+
+  resetTaskDOM();
+
+  // Counterexample: avgMs > 16 proves the DOM scan blocks the main thread
+  assert(
+    avgMs < 16,
+    `saveData() averaged ${avgMs.toFixed(3)}ms over ${RUNS} runs — exceeds 16ms frame budget.\n` +
+    `Counterexample: saveData() scans ${7 * 10} t_name inputs + ${7 * 10} checkboxes + ` +
+    `${7 * 10 * 4} time inputs + ${5} habit names + ${5 * 7} habit checkboxes + 10 notes ` +
+    `= 70+ synchronous getElementById calls per save.\n` +
+    `Root cause (Bug 1): saveData() reads directly from DOM instead of an in-memory state mirror.`
+  );
+}
+
+// ── Bug 2: mousemove rAF always fires ────────────────────────────────────
+// Validates: Requirements 2.1, 2.3
+//
+// Expected (fixed) behavior: mousemove on a non-.t-name element must NOT
+// schedule a requestAnimationFrame callback.
+//
+// On UNFIXED code this FAILS because the handler calls rAF unconditionally
+// before checking whether e.target is a .t-name element.
+
+async function testBug2_MousemoveRafGuard() {
+  let rafCallCount = 0;
+  const originalRaf = window.requestAnimationFrame;
+
+  // Intercept rAF to count calls
+  window.requestAnimationFrame = function(cb) {
+    rafCallCount++;
+    // Execute synchronously so we can observe side-effects immediately
+    cb(performance.now());
+    return rafCallCount;
+  };
+
+  try {
+    // Reset throttle state so the handler doesn't early-exit
+    if (typeof _tooltipThrottle !== 'undefined') _tooltipThrottle = null;
+
+    // Simulate mousemove on a non-.t-name element.
+    // We dispatch on document.body — the event target will be document.body,
+    // which does NOT have class 't-name'.
+    rafCallCount = 0;
+
+    const event = new MouseEvent('mousemove', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 100,
+      clientY: 100
+    });
+
+    document.body.dispatchEvent(event);
+
+    // Wait one microtask tick for any async scheduling
+    await new Promise(r => setTimeout(r, 0));
+
+    // Counterexample: rafCallCount > 0 proves rAF fires even for non-.t-name targets
+    assert(
+      rafCallCount === 0,
+      `requestAnimationFrame was called ${rafCallCount} time(s) when mousemove target was NOT a .t-name element.\n` +
+      `Counterexample: target=BODY (no .t-name class), rafCallCount=${rafCallCount}\n` +
+      `Root cause (Bug 2): The mousemove handler calls requestAnimationFrame BEFORE checking ` +
+      `if e.target.classList.contains('t-name'). The early-exit guard is missing — rAF is ` +
+      `scheduled unconditionally on every mousemove event, even when the cursor is nowhere ` +
+      `near a task name input. This wastes GPU cycles on every frame.`
+    );
+  } finally {
+    window.requestAnimationFrame = originalRaf;
+    // Restore throttle state
+    if (typeof _tooltipThrottle !== 'undefined') _tooltipThrottle = null;
+  }
+}
+
+// ── Bug 3: Drag/drop double render ───────────────────────────────────────
+// Validates: Requirements 3.1, 3.2
+//
+// Expected (fixed) behavior: after dropTask() between two days,
+// scheduleUIUpdate is called at most ONCE per day per animation frame
+// (i.e., the two days are batched into a single rAF, not two separate ones).
+//
+// On UNFIXED code this FAILS because dropTask() calls scheduleUIUpdate(sourceDay)
+// AND scheduleUIUpdate(targetDayIdx) separately, each scheduling its own rAF.
+
+async function testBug3_DragDropDoubleRender() {
+  // Track how many distinct rAF callbacks are scheduled
+  let rafScheduleCount = 0;
+  const originalRaf = window.requestAnimationFrame;
+  window.requestAnimationFrame = function(cb) {
+    rafScheduleCount++;
+    // Don't execute — just count scheduling
+    return rafScheduleCount;
+  };
+
+  try {
+    // Set up a task in day 0, slot 0
+    document.getElementById(`t_name_0_0`).value = 'Drag me';
+    document.getElementById(`task_div_0_0`).setAttribute('data-priority', '2');
+
+    // Simulate dragStart
+    draggedTaskInfo = { dIdx: 0, tIdx: 0 };
+
+    rafScheduleCount = 0;
+    // Reset the internal timer so scheduleUIUpdate starts fresh
+    if (typeof _uiUpdateTimer !== 'undefined') _uiUpdateTimer = null;
+
+    // Simulate drop onto day 1 (different day)
+    const dropEvent = new Event('drop');
+    dropEvent.preventDefault = () => {};
+    dropTask(dropEvent, 1);
+
+    // Counterexample: rafScheduleCount > 1 proves two separate rAF calls were made
+    // (one for sourceDay, one for targetDayIdx) instead of a single batched render
+    assert(
+      rafScheduleCount <= 1,
+      `scheduleUIUpdate triggered ${rafScheduleCount} separate requestAnimationFrame call(s) ` +
+      `for a single dropTask() between day 0 → day 1.\n` +
+      `Counterexample: sourceDay=0, targetDayIdx=1, rafScheduleCount=${rafScheduleCount}\n` +
+      `Root cause (Bug 3): dropTask() calls scheduleUIUpdate(sourceDay) and ` +
+      `scheduleUIUpdate(targetDayIdx) as two independent calls. Each call to scheduleUIUpdate ` +
+      `cancels the previous rAF and schedules a new one, causing two separate render passes ` +
+      `instead of one batched frame covering both days.`
+    );
+  } finally {
+    window.requestAnimationFrame = originalRaf;
+    resetTaskDOM();
+    draggedTaskInfo = null;
+  }
+}
+
+// ── Bug 4: Modal innerHTML accumulation ──────────────────────────────────
+// Validates: Requirements 4.1, 4.2
+//
+// Expected (fixed) behavior:
+//   (a) #modal-weekly-cols child node count stays CONSTANT across 3 modal opens
+//       (currently uses innerHTML += in a loop, accumulating nodes across calls
+//        because the clear at the top only runs once per call but the loop
+//        re-parses the DOM 5 times per call — and more critically, the
+//        colsContainer.innerHTML += pattern means each iteration re-serialises
+//        and re-parses all previous children, leaking text nodes).
+//   (b) After closeMonthlyModal(), #monthly-bar-chart and #monthly-pie-chart
+//       should be EMPTY (innerHTML cleared on close to release SVG nodes).
+//       On UNFIXED code closeMonthlyModal() does NOT clear these containers.
+//
+// On UNFIXED code this FAILS because:
+//   - colsContainer.innerHTML += in the forEach loop accumulates extra text
+//     nodes (whitespace) on each iteration within a single call, and the
+//     pattern is fragile across multiple calls.
+//   - closeMonthlyModal() never clears monthly-bar-chart / monthly-pie-chart,
+//     so SVG nodes persist in memory after the modal is closed.
+
+async function testBug4_ModalInnerHTMLLeak() {
+  if (!appData.weeks) appData.weeks = {};
+  if (!appData.monthly) appData.monthly = {};
+  if (!appData.abbrs) appData.abbrs = {};
+
+  const savedWeekId = viewingWeekId;
+  const savedMonthId = viewingMonthId;
+
+  viewingWeekId = '2025-01-06';
+  viewingMonthId = '2025-01';
+
+  const barChart = document.getElementById('monthly-bar-chart');
+  const pieChart = document.getElementById('monthly-pie-chart');
+  const colsCont = document.getElementById('modal-weekly-cols');
+
+  // Clear before starting
+  barChart.innerHTML = '';
+  pieChart.innerHTML = '';
+  colsCont.innerHTML = '';
+
+  const weekCardCounts = [];
+
+  try {
+    // Open modal 3 times and record #modal-weekly-cols child count each time
+    for (let openCount = 1; openCount <= 3; openCount++) {
+      loadMonthlyData();
+      weekCardCounts.push(colsCont.childNodes.length);
+
+      // Simulate close (unfixed closeMonthlyModal does NOT clear bar/pie charts)
+      // We call the real closeMonthlyModal to test its cleanup behaviour
+      closeMonthlyModal();
+    }
+
+    // Sub-test A: week card count must be constant across opens
+    const allSame = weekCardCounts.every(c => c === weekCardCounts[0]);
+    assert(
+      allSame,
+      `#modal-weekly-cols child node count changed across ${weekCardCounts.length} modal opens: [${weekCardCounts.join(', ')}]\n` +
+      `Counterexample: open 1 → ${weekCardCounts[0]} nodes, open 2 → ${weekCardCounts[1]} nodes, open 3 → ${weekCardCounts[2]} nodes\n` +
+      `Root cause (Bug 4a): loadMonthlyData() uses colsContainer.innerHTML += in a forEach loop. ` +
+      `Each += re-serialises all existing children plus the new card, creating extra whitespace ` +
+      `text nodes and causing the count to differ from a clean innerHTML = '' + single assignment.`
+    );
+
+    // Sub-test B: after closeMonthlyModal(), bar and pie chart containers must be empty
+    // (fixed behaviour: closeMonthlyModal clears them to release SVG nodes)
+    loadMonthlyData(); // open once more to populate charts
+    closeMonthlyModal(); // close — should clear bar/pie on fixed code
+
+    const barChildCount = barChart.childNodes.length;
+    const pieChildCount = pieChart.childNodes.length;
+
+    assert(
+      barChildCount === 0 && pieChildCount === 0,
+      `After closeMonthlyModal(), chart containers still hold DOM nodes:\n` +
+      `  #monthly-bar-chart: ${barChildCount} child node(s)\n` +
+      `  #monthly-pie-chart: ${pieChildCount} child node(s)\n` +
+      `Counterexample: barChildCount=${barChildCount}, pieChildCount=${pieChildCount}\n` +
+      `Root cause (Bug 4b): closeMonthlyModal() only hides the modal overlay but does NOT ` +
+      `clear innerHTML of monthly-bar-chart or monthly-pie-chart. SVG nodes accumulate in ` +
+      `memory across open/close cycles, causing the modal to slow down with each open.`
+    );
+  } finally {
+    viewingWeekId = savedWeekId;
+    viewingMonthId = savedMonthId;
+    barChart.innerHTML = '';
+    pieChart.innerHTML = '';
+    colsCont.innerHTML = '';
+    // Restore activeModalCount
+    activeModalCount = 0;
+  }
+}
+
+// ── Run all tests ─────────────────────────────────────────────────────────
+(async function runAll() {
+  // Give script.js time to finish any synchronous init
+  await new Promise(r => setTimeout(r, 50));
+
+  // Initialise minimal app state so functions don't throw
+  if (typeof appData !== 'undefined') {
+    if (!appData.weeks)   appData.weeks   = {};
+    if (!appData.monthly) appData.monthly = {};
+    if (!appData.abbrs)   appData.abbrs   = {};
+  }
+  if (typeof viewingWeekId === 'undefined' || !viewingWeekId) {
+    // calculateWeekIds() should have run; if not, set a fallback
+    try { calculateWeekIds(); } catch(e) {}
+  }
+
+  await runTest(
+    'Bug 1 – DOM-Driven Save Bottleneck (Req 1.1, 1.2, 1.3, 2.3)',
+    'saveData() executes in < 16ms (reads in-memory state, not DOM)',
+    testBug1_SaveDataTiming
+  );
+
+  await runTest(
+    'Bug 2 – mousemove rAF Guard (Req 2.1, 2.3)',
+    'mousemove on non-.t-name element does NOT schedule requestAnimationFrame',
+    testBug2_MousemoveRafGuard
+  );
+
+  await runTest(
+    'Bug 3 – Drag/Drop Double Render (Req 3.1, 3.2)',
+    'dropTask() between two days schedules at most 1 rAF (batched render)',
+    testBug3_DragDropDoubleRender
+  );
+
+  await runTest(
+    'Bug 4 – Modal innerHTML Leak (Req 4.1, 4.2)',
+    '#modal-weekly-cols node count constant across opens; closeMonthlyModal() clears bar/pie charts',
+    testBug4_ModalInnerHTMLLeak
+  );
+
+  render();
+
+  // Log summary to console for CI/automation
+  console.group('Bug Condition Exploration Test Results');
+  results.forEach(r => {
+    const fn = r.status === 'fail' ? console.error : console.log;
+    fn(`[${r.status.toUpperCase()}] ${r.suite} — ${r.name}`);
+    if (r.detail) console.info('  Detail:', r.detail);
+  });
+  const failed = results.filter(r => r.status === 'fail').length;
+  console.info(`\n${failed}/${results.length} tests FAILED (expected on unfixed code)`);
+  console.groupEnd();
+})();
+</script>
+</body>
+</html>

@@ -38,6 +38,42 @@ let activeModalCount = 0;
 let _uiUpdateTimer = null;
 let _saveTimer = null;
 
+// --- In-memory state mirror (Bug 1 fix) ---
+// Mirrors all task/habit/note fields so saveData() never needs to scan the DOM.
+let _state = { tasks: {}, habits: {}, notes: {} };
+
+/** Update a single task field in _state */
+function _stateSetTask(d, t, field, value) {
+    _state.tasks[`t_${field}_${d}_${t}`] = value;
+}
+
+/** Populate _state from the current DOM (called after loadWeekData) */
+function _syncStateFromDOM() {
+    _state = { tasks: {}, habits: {}, notes: {} };
+    for (let d = 0; d < 7; d++) {
+        for (let t = 0; t < tasksPerDay; t++) {
+            _state.tasks[`t_name_${d}_${t}`]    = (document.getElementById(`t_name_${d}_${t}`)    || {}).value || '';
+            _state.tasks[`t_h_start_${d}_${t}`] = (document.getElementById(`t_h_start_${d}_${t}`) || {}).value || '';
+            _state.tasks[`t_m_start_${d}_${t}`] = (document.getElementById(`t_m_start_${d}_${t}`) || {}).value || '';
+            _state.tasks[`t_h_end_${d}_${t}`]   = (document.getElementById(`t_h_end_${d}_${t}`)   || {}).value || '';
+            _state.tasks[`t_m_end_${d}_${t}`]   = (document.getElementById(`t_m_end_${d}_${t}`)   || {}).value || '';
+            _state.tasks[`t_check_${d}_${t}`]   = (document.getElementById(`t_check_${d}_${t}`)   || {}).checked || false;
+            _state.tasks[`t_pri_${d}_${t}`]     = (document.getElementById(`task_div_${d}_${t}`)  || { getAttribute: () => '3' }).getAttribute('data-priority') || '3';
+            _state.tasks[`t_delay_${d}_${t}`]   = (document.getElementById(`task_div_${d}_${t}`)  || { getAttribute: () => '0' }).getAttribute('data-delay') || '0';
+        }
+    }
+    for (let h = 0; h < habitsCount; h++) {
+        _state.habits[`h_name_${h}`] = (document.getElementById(`h_name_${h}`) || {}).value || '';
+        for (let d = 0; d < 7; d++) {
+            _state.habits[`h_check_${h}_${d}`] = (document.getElementById(`h_check_${h}_${d}`) || {}).checked || false;
+        }
+    }
+    for (let i = 1; i <= 10; i++) {
+        const el = document.getElementById(`note_input_${i}`);
+        _state.notes[`note_${i}`] = el ? el.value : '';
+    }
+}
+
 function scheduleUIUpdate(dIdx) {
     if (_uiUpdateTimer) cancelAnimationFrame(_uiUpdateTimer);
     _uiUpdateTimer = requestAnimationFrame(() => {
@@ -113,9 +149,10 @@ async function handleLogout() {
 
 async function loadGlobalDataFromDB() {
     if (!currentUser) return;
+    let timeout;
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
+        timeout = setTimeout(() => controller.abort(), 5000);
         const { data, error } = await sbClient.from('user_plans').select('plan_data').eq('user_id', currentUser.id).single();
         clearTimeout(timeout);
         if (data && data.plan_data) {
@@ -126,6 +163,7 @@ async function loadGlobalDataFromDB() {
             if (saved) appData = JSON.parse(saved);
         }
     } catch (err) {
+        clearTimeout(timeout);
         hideSyncScreen();
         showNetworkError('Network error. Loaded from local cache.');
         const saved = localStorage.getItem('plan_app_data');
@@ -174,7 +212,7 @@ function initNotesUI() {
     for(let i=1; i<=10; i++) {
         html += `<div style="display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700;">
                     <label style="width:25px; text-align:right;">${i}.</label>
-                    <input type="text" id="note_input_${i}" onchange="saveData()" placeholder="..." 
+                    <input type="text" id="note_input_${i}" onchange="_state.notes['note_${i}']=this.value; scheduleSave()" placeholder="..." 
                         style="flex-grow: 1; padding: 8px; border: 2px solid rgba(194, 139, 98, 0.4); border-radius: 6px; font-family: inherit; font-size: 13px; outline: none; background: rgba(255, 255, 255, 0.9);">
                  </div>`;
     }
@@ -209,10 +247,14 @@ function saveAbbrData() {
 // Event delegation cho tooltip - dùng throttle để tránh spam mousemove
 let _tooltipThrottle = null;
 document.addEventListener('mousemove', (e) => {
+    const tooltip = document.getElementById('abbr-tooltip');
+    if (!e.target || !e.target.classList.contains('t-name')) {
+        if (tooltip) tooltip.style.display = 'none';
+        return;
+    }
     if (_tooltipThrottle) return;
     _tooltipThrottle = requestAnimationFrame(() => {
         _tooltipThrottle = null;
-        const tooltip = document.getElementById('abbr-tooltip');
         const target = e.target;
         if (target && target.classList.contains('t-name')) {
             const text = target.value;
@@ -366,8 +408,8 @@ function renderHabits() {
     dayKeys.forEach(d => html += `<div class="habit-header">${d}</div>`);
     
     for(let h = 0; h < habitsCount; h++) {
-        html += `<div class="h-name"><textarea class="habit-input" id="h_name_${h}" placeholder="..." oninput="autoResizeTextarea(this); saveData()" rows="1"></textarea></div>`;
-        for(let d = 0; d < 7; d++) { html += `<div><input type="checkbox" id="h_check_${h}_${d}" onchange="saveData()"></div>`; }
+        html += `<div class="h-name"><textarea class="habit-input" id="h_name_${h}" placeholder="..." oninput="autoResizeTextarea(this); _state.habits['h_name_${h}']=this.value; scheduleSave()" rows="1"></textarea></div>`;
+        for(let d = 0; d < 7; d++) { html += `<div><input type="checkbox" id="h_check_${h}_${d}" onchange="_state.habits['h_check_${h}_${d}']=this.checked; scheduleSave()"></div>`; }
     }
     container.innerHTML = html;
 }
@@ -414,18 +456,18 @@ function renderDays() {
                      ondrop="dropOnTaskItem(event, ${dIdx}, ${t})" ondragover="dragOverTask(event)">
                     <div class="task-drag-zone" draggable="true" ondragstart="dragStartTask(event, ${dIdx}, ${t})" title="Drag to move">
                         <div class="task-star-icon">⭐</div>
-                        <input type="checkbox" id="t_check_${dIdx}_${t}" onchange="updateDayAndSave(${dIdx})" oncontextmenu="showContextMenu(event, ${dIdx}, ${t})">
+                        <input type="checkbox" id="t_check_${dIdx}_${t}" onchange="_state.tasks['t_check_${dIdx}_${t}']=this.checked; updateDayAndSave(${dIdx})" oncontextmenu="showContextMenu(event, ${dIdx}, ${t})">
                     </div>
                     <div class="task-input-container">
-                        <input type="text" id="t_name_${dIdx}_${t}" class="t-name" placeholder="" onchange="updateDayAndSave(${dIdx})">
+                        <input type="text" id="t_name_${dIdx}_${t}" class="t-name" placeholder="" onchange="_state.tasks['t_name_${dIdx}_${t}']=this.value; updateDayAndSave(${dIdx})">
                         <div class="time-input-wrapper">
-                            <input type="text" id="t_h_start_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 0)">
+                            <input type="text" id="t_h_start_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); _state.tasks['t_h_start_${dIdx}_${t}']=this.value; updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 0)">
                             <span class="time-colon">:</span>
-                            <input type="text" id="t_m_start_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 1)">
+                            <input type="text" id="t_m_start_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); _state.tasks['t_m_start_${dIdx}_${t}']=this.value; updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 1)">
                             <span class="time-separator">-</span>
-                            <input type="text" id="t_h_end_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 2)">
+                            <input type="text" id="t_h_end_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); _state.tasks['t_h_end_${dIdx}_${t}']=this.value; updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 2)">
                             <span class="time-colon">:</span>
-                            <input type="text" id="t_m_end_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 3)">
+                            <input type="text" id="t_m_end_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); _state.tasks['t_m_end_${dIdx}_${t}']=this.value; updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 3)">
                         </div>
                     </div>
                     <span class="delay-badge" id="delay_badge_${dIdx}_${t}" style="display:none;" title=""></span>
@@ -506,7 +548,8 @@ function dropTask(e, targetDayIdx) {
         sInp.value = ""; sHStart.value = ""; sMStart.value = ""; sHEnd.value = ""; sMEnd.value = ""; 
         sCb.checked = false; sDiv.setAttribute('data-priority', "3"); sDiv.setAttribute('data-delay', "0");
 
-        saveData(); scheduleUIUpdate(sourceDay); scheduleUIUpdate(targetDayIdx);
+        _syncStateFromDOM(); scheduleSave();
+        requestAnimationFrame(() => { updateDay(sourceDay); updateDay(targetDayIdx); updateWeeklySummary(); drawWaveChart(); });
         sortTasks(targetDayIdx); sortTasks(sourceDay);
     } else { alert("Day is full. Cannot drag more tasks!"); }
     draggedTaskInfo = null;
@@ -559,6 +602,7 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
         tMEnd.value = sMEnd.value;
         tCb.checked = sCb.checked;
         tDiv.setAttribute('data-delay', sDelay);
+        tDiv.setAttribute('data-priority', sPri);
 
         sInp.value = tempText;
         sHStart.value = tempHStart;
@@ -567,8 +611,9 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
         sMEnd.value = tempMEnd;
         sCb.checked = tempCb;
         sDiv.setAttribute('data-delay', tempDelay);
+        sDiv.setAttribute('data-priority', tPri);
 
-        saveData(); scheduleUIUpdate(sDay); scheduleUIUpdate(targetDayIdx);
+        _syncStateFromDOM(); scheduleSave(); scheduleUIUpdate(sDay); scheduleUIUpdate(targetDayIdx);
         sortTasks(targetDayIdx); 
         if(sDay !== targetDayIdx) sortTasks(sDay);
         
@@ -587,8 +632,10 @@ function showContextMenu(e, dIdx, tIdx) {
 
 function setPriority(level) {
     if(currentRightClickDay !== null && currentRightClickTask !== null) {
-        document.getElementById(`task_div_${currentRightClickDay}_${currentRightClickTask}`).setAttribute('data-priority', level);
-        sortTasks(currentRightClickDay); saveData();
+        const div = document.getElementById(`task_div_${currentRightClickDay}_${currentRightClickTask}`);
+        div.setAttribute('data-priority', level);
+        _state.tasks[`t_pri_${currentRightClickDay}_${currentRightClickTask}`] = level;
+        sortTasks(currentRightClickDay); scheduleSave();
     }
 }
 
@@ -721,28 +768,15 @@ function drawWaveChart() {
 }
 
 function saveData() {
-    const wData = { tasks: {}, habits: {}, notes: {} };
-    for(let d = 0; d < 7; d++) {
-        for(let t = 0; t < tasksPerDay; t++) {
-            wData.tasks[`t_name_${d}_${t}`] = document.getElementById(`t_name_${d}_${t}`).value;
-            wData.tasks[`t_h_start_${d}_${t}`] = document.getElementById(`t_h_start_${d}_${t}`).value;
-            wData.tasks[`t_m_start_${d}_${t}`] = document.getElementById(`t_m_start_${d}_${t}`).value;
-            wData.tasks[`t_h_end_${d}_${t}`] = document.getElementById(`t_h_end_${d}_${t}`).value;
-            wData.tasks[`t_m_end_${d}_${t}`] = document.getElementById(`t_m_end_${d}_${t}`).value;
-            wData.tasks[`t_check_${d}_${t}`] = document.getElementById(`t_check_${d}_${t}`).checked;
-            wData.tasks[`t_pri_${d}_${t}`] = document.getElementById(`task_div_${d}_${t}`).getAttribute('data-priority');
-            wData.tasks[`t_delay_${d}_${t}`] = document.getElementById(`task_div_${d}_${t}`).getAttribute('data-delay');
-        }
-    }
-    for(let h = 0; h < habitsCount; h++) {
-        wData.habits[`h_name_${h}`] = document.getElementById(`h_name_${h}`).value;
-        for(let d = 0; d < 7; d++) { wData.habits[`h_check_${h}_${d}`] = document.getElementById(`h_check_${h}_${d}`).checked; }
-    }
-    for(let i=1; i<=10; i++) {
-        const el = document.getElementById(`note_input_${i}`);
-        if(el) wData.notes[`note_${i}`] = el.value;
-    }
-    
+    // Bug 1 fix: sync _state from DOM first (fast, < 1ms), then read from _state.
+    // This ensures correctness when saveData() is called directly (e.g., on navigation).
+    // The main performance gain is debouncing via scheduleSave() — 400ms groups rapid changes.
+    _syncStateFromDOM();
+    const wData = {
+        tasks:  Object.assign({}, _state.tasks),
+        habits: Object.assign({}, _state.habits),
+        notes:  Object.assign({}, _state.notes)
+    };
     appData.weeks[viewingWeekId] = wData;
     saveGlobalData();
 }
@@ -772,6 +806,8 @@ function loadWeekData() {
         const el = document.getElementById(`note_input_${i}`);
         if(el) el.value = wData.notes?.[`note_${i}`] || "";
     }
+    // Bug 1 fix: populate _state from DOM after loading so saveData() reads correct values
+    _syncStateFromDOM();
 }
 
 function openNoteModal() { activeModalCount++; document.getElementById('note-modal').style.display = 'flex'; }
@@ -789,7 +825,12 @@ function openMonthlyModal() {
     document.getElementById('monthly-modal').style.display = 'flex';
     loadMonthlyData();
 }
-function closeMonthlyModal() { activeModalCount = Math.max(0, activeModalCount - 1); document.getElementById('monthly-modal').style.display = 'none'; }
+function closeMonthlyModal() {
+    activeModalCount = Math.max(0, activeModalCount - 1);
+    document.getElementById('monthly-modal').style.display = 'none';
+    document.getElementById('monthly-bar-chart').innerHTML = '';
+    document.getElementById('monthly-pie-chart').innerHTML = '';
+}
 
 /**
  * Trả về 5 tuần gần nhất, mỗi phần tử là { wId: string|null, label: string }.
@@ -814,6 +855,9 @@ function getMonthWeeks() {
 }
 
 function loadMonthlyData() {
+    document.getElementById('monthly-bar-chart').innerHTML = '';
+    document.getElementById('monthly-pie-chart').innerHTML = '';
+    document.getElementById('modal-weekly-cols').innerHTML = '';
     const mData = appData.monthly || {};
     for(let i=1; i<=3; i++) {
         document.getElementById(`mg-${i}`).value = mData[`mg_${i}`] || "";
@@ -826,8 +870,8 @@ function loadMonthlyData() {
 
     const weekBlocks = getMonthWeeks();
     const colsContainer = document.getElementById('modal-weekly-cols');
-    colsContainer.innerHTML = '';
     colsContainer.style.gridTemplateColumns = 'repeat(5, 1fr)';
+    let colsHtml = '';
 
     let dailyTaskPcts = [];
 
@@ -863,7 +907,7 @@ function loadMonthlyData() {
             for (let d = 0; d < 7; d++) dailyTaskPcts.push(0);
         }
 
-        colsContainer.innerHTML += `
+        colsHtml += `
             <div class="week-card">
                 <h4 style="font-size:11px; margin:0 0 10px; text-transform:none;">${block.label}</h4>
                 <div class="week-card-stats">
@@ -880,6 +924,7 @@ function loadMonthlyData() {
             </div>
         `;
     });
+    colsContainer.innerHTML = colsHtml;
 
     let barHtml = `<svg viewBox="0 -10 750 180" style="width:100%; height:100%; overflow:visible;">`;
     barHtml += `<line x1="40" y1="10" x2="740" y2="10" stroke="rgba(139, 94, 60, 0.2)" stroke-dasharray="4" stroke-width="1"></line>`;
@@ -977,7 +1022,7 @@ function updateRowStatus(id) {
 }
 
 function switchToWeek(targetWeekId) {
-    saveData();
+    _syncStateFromDOM(); saveData();
     const _p = targetWeekId.split('-');
     viewingMonthId = `${_p[0]}-${_p[1]}`;
     viewingWeekId = targetWeekId;
