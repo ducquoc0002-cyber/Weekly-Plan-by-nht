@@ -34,17 +34,60 @@ let currentRightClickTask = null;
 let draggedTaskInfo = null;
 let activeModalCount = 0;
 
+// --- Debounce helpers ---
+let _uiUpdateTimer = null;
+let _saveTimer = null;
+
+function scheduleUIUpdate(dIdx) {
+    if (_uiUpdateTimer) cancelAnimationFrame(_uiUpdateTimer);
+    _uiUpdateTimer = requestAnimationFrame(() => {
+        updateDay(dIdx);
+        updateWeeklySummary();
+        drawWaveChart();
+        _uiUpdateTimer = null;
+    });
+}
+
+function scheduleSave() {
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => saveData(), 400);
+}
+
 async function checkAuth() {
-    const { data: { session } } = await sbClient.auth.getSession();
-    if (session) {
-        currentUser = session.user;
-        document.getElementById('auth-overlay').style.display = 'none';
-        document.getElementById('sync-loading-screen').style.display = 'flex';
-        await loadGlobalDataFromDB();
-        document.getElementById('sync-loading-screen').style.display = 'none';
-        continueInit();
-    } else {
-        document.getElementById('auth-overlay').style.display = 'flex';
+    try {
+        const { data: { session } } = await sbClient.auth.getSession();
+        if (session) {
+            currentUser = session.user;
+            document.getElementById('auth-overlay').style.display = 'none';
+            document.getElementById('sync-loading-screen').style.display = 'flex';
+            await loadGlobalDataFromDB();
+            document.getElementById('sync-loading-screen').style.display = 'none';
+            continueInit();
+        } else {
+            document.getElementById('auth-overlay').style.display = 'flex';
+        }
+    } catch (err) {
+        hideSyncScreen();
+        showNetworkError('Cannot connect. Working offline.');
+        const saved = localStorage.getItem('plan_app_data');
+        if (saved) { appData = JSON.parse(saved); continueInit(); }
+        else { document.getElementById('auth-overlay').style.display = 'flex'; }
+    }
+}
+
+function hideSyncScreen() {
+    const el = document.getElementById('sync-loading-screen');
+    if (el) el.style.display = 'none';
+}
+
+function showNetworkError(msg) {
+    let banner = document.getElementById('network-error-banner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'network-error-banner';
+        banner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:#D32F2F;color:#fff;text-align:center;padding:10px;font-weight:700;font-size:13px;z-index:99999;';
+        banner.innerHTML = msg + ' <button onclick="this.parentElement.remove()" style="margin-left:12px;background:rgba(255,255,255,0.25);border:none;color:#fff;padding:2px 10px;border-radius:4px;cursor:pointer;font-weight:700;">✕</button>';
+        document.body.prepend(banner);
     }
 }
 
@@ -70,11 +113,21 @@ async function handleLogout() {
 
 async function loadGlobalDataFromDB() {
     if (!currentUser) return;
-    const { data, error } = await sbClient.from('user_plans').select('plan_data').eq('user_id', currentUser.id).single();
-    if (data && data.plan_data) {
-        appData = data.plan_data;
-        localStorage.setItem('plan_app_data', JSON.stringify(appData));
-    } else {
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const { data, error } = await sbClient.from('user_plans').select('plan_data').eq('user_id', currentUser.id).single();
+        clearTimeout(timeout);
+        if (data && data.plan_data) {
+            appData = data.plan_data;
+            localStorage.setItem('plan_app_data', JSON.stringify(appData));
+        } else {
+            const saved = localStorage.getItem('plan_app_data');
+            if (saved) appData = JSON.parse(saved);
+        }
+    } catch (err) {
+        hideSyncScreen();
+        showNetworkError('Network error. Loaded from local cache.');
         const saved = localStorage.getItem('plan_app_data');
         if (saved) appData = JSON.parse(saved);
     }
@@ -88,13 +141,19 @@ function saveGlobalData() {
     if (currentUser) {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(async () => {
-            const { error } = await sbClient.from('user_plans').upsert({ user_id: currentUser.id, plan_data: appData });
-            if (!error) {
-                const toast = document.getElementById('save-toast');
-                toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 2000);
+            try {
+                const { error } = await sbClient.from('user_plans').upsert({ user_id: currentUser.id, plan_data: appData });
+                if (!error) {
+                    const toast = document.getElementById('save-toast');
+                    toast.classList.add('show');
+                    setTimeout(() => toast.classList.remove('show'), 2000);
+                } else {
+                    showNetworkError('Save failed. Data kept locally.');
+                }
+            } catch (err) {
+                showNetworkError('Offline. Changes saved locally.');
             }
-        }, 1500); 
+        }, 1500);
     }
 }
 
@@ -147,33 +206,38 @@ function saveAbbrData() {
     saveGlobalData();
 }
 
+// Event delegation cho tooltip - dùng throttle để tránh spam mousemove
+let _tooltipThrottle = null;
 document.addEventListener('mousemove', (e) => {
-    const tooltip = document.getElementById('abbr-tooltip');
-    if (e.target && e.target.classList.contains('t-name')) {
-        const text = e.target.value;
-        if (!text) { tooltip.style.display = 'none'; return; }
-        
-        let foundAbbrs = [];
-        for(let i=1; i<=10; i++) {
-            const k = appData.abbrs?.[`abbr_k_${i}`];
-            const v = appData.abbrs?.[`abbr_v_${i}`];
-            if(k && v) {
-                const regex = new RegExp(`\\b${k}\\b`, 'i');
-                if (regex.test(text)) foundAbbrs.push(`<b>${k}</b>: ${v}`);
+    if (_tooltipThrottle) return;
+    _tooltipThrottle = requestAnimationFrame(() => {
+        _tooltipThrottle = null;
+        const tooltip = document.getElementById('abbr-tooltip');
+        const target = e.target;
+        if (target && target.classList.contains('t-name')) {
+            const text = target.value;
+            if (!text) { tooltip.style.display = 'none'; return; }
+            let foundAbbrs = [];
+            for (let i = 1; i <= 10; i++) {
+                const k = appData.abbrs?.[`abbr_k_${i}`];
+                const v = appData.abbrs?.[`abbr_v_${i}`];
+                if (k && v) {
+                    const regex = new RegExp(`\\b${k}\\b`, 'i');
+                    if (regex.test(text)) foundAbbrs.push(`<b>${k}</b>: ${v}`);
+                }
             }
-        }
-        
-        if (foundAbbrs.length > 0) {
-            tooltip.innerHTML = foundAbbrs.join('<br>');
-            tooltip.style.display = 'block';
-            tooltip.style.left = (e.pageX / 1.1) + 'px';
-            tooltip.style.top = ((e.pageY / 1.1) + 20) + 'px';
+            if (foundAbbrs.length > 0) {
+                tooltip.innerHTML = foundAbbrs.join('<br>');
+                tooltip.style.display = 'block';
+                tooltip.style.left = (e.pageX / 1.1) + 'px';
+                tooltip.style.top = ((e.pageY / 1.1) + 20) + 'px';
+            } else {
+                tooltip.style.display = 'none';
+            }
         } else {
-            tooltip.style.display = 'none';
+            if (tooltip) tooltip.style.display = 'none';
         }
-    } else {
-        if (tooltip) tooltip.style.display = 'none';
-    }
+    });
 });
 
 function continueInit() {
@@ -442,7 +506,7 @@ function dropTask(e, targetDayIdx) {
         sInp.value = ""; sHStart.value = ""; sMStart.value = ""; sHEnd.value = ""; sMEnd.value = ""; 
         sCb.checked = false; sDiv.setAttribute('data-priority', "3"); sDiv.setAttribute('data-delay', "0");
 
-        saveData(); updateDay(sourceDay); updateDay(targetDayIdx); updateWeeklySummary(); drawWaveChart();
+        saveData(); scheduleUIUpdate(sourceDay); scheduleUIUpdate(targetDayIdx);
         sortTasks(targetDayIdx); sortTasks(sourceDay);
     } else { alert("Day is full. Cannot drag more tasks!"); }
     draggedTaskInfo = null;
@@ -504,7 +568,7 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
         sCb.checked = tempCb;
         sDiv.setAttribute('data-delay', tempDelay);
 
-        saveData(); updateDay(sDay); updateDay(targetDayIdx); updateWeeklySummary(); drawWaveChart();
+        saveData(); scheduleUIUpdate(sDay); scheduleUIUpdate(targetDayIdx);
         sortTasks(targetDayIdx); 
         if(sDay !== targetDayIdx) sortTasks(sDay);
         
@@ -556,7 +620,7 @@ function updateWeeklySummary() {
     document.getElementById('weekly-progress').innerText = weekInProgress;
 }
 
-function updateDayAndSave(dIdx) { saveData(); updateDay(dIdx); updateWeeklySummary(); drawWaveChart(); }
+function updateDayAndSave(dIdx) { scheduleSave(); scheduleUIUpdate(dIdx); }
 
 function updateDay(dIdx) {
     let done = 0; let totalActive = 0;
