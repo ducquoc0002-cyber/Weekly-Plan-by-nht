@@ -692,8 +692,7 @@ function dropTask(e, targetDayIdx) {
     e.preventDefault();
     if (!store.draggedTask) return;
     const { dIdx: sourceDay, tIdx: sourceTask } = store.draggedTask;
-    store.draggedTask = null;
-    if (sourceDay === targetDayIdx) return;
+    if (sourceDay === targetDayIdx) { store.draggedTask = null; return; }
 
     // Find first empty slot in target day (check _state, not DOM)
     let emptyIdx = -1;
@@ -701,6 +700,8 @@ function dropTask(e, targetDayIdx) {
         if (!(store.state.tasks[`t_name_${targetDayIdx}_${t}`] || '').trim()) { emptyIdx = t; break; }
     }
     if (emptyIdx === -1) { alert('Day is full. Cannot drag more tasks!'); return; }
+
+    store.draggedTask = null; // Only clear after validation passes
 
     // 1. Swap in _state first
     const srcData = _readTaskFromState(sourceDay, sourceTask);
@@ -908,8 +909,8 @@ function showTooltip(e, dayIndex) {
     const s = store.dailyStats[dayIndex];
     t.textContent = `${s.done}/${s.total} tasks completed`;
     t.style.display = 'block';
-    t.style.left = (e.pageX / 1.1) + 'px';
-    t.style.top  = ((e.pageY / 1.1) - 15) + 'px';
+    t.style.left = (e.clientX + window.scrollX) + 'px';
+    t.style.top  = (e.clientY + window.scrollY - 15) + 'px';
 }
 function hideTooltip() { document.getElementById('chart-tooltip').style.display = 'none'; }
 
@@ -1238,6 +1239,15 @@ function switchToMonth(monthId) {
 // ============================================================
 // 15. TOOLTIP (throttled mousemove)
 // ============================================================
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 let _tooltipThrottle = null;
 document.addEventListener('mousemove', e => {
     const tooltip = document.getElementById('abbr-tooltip');
@@ -1256,15 +1266,16 @@ document.addEventListener('mousemove', e => {
         for (let i = 1; i <= 10; i++) {
             const k = store.appData.abbrs?.[`abbr_k_${i}`];
             const v = store.appData.abbrs?.[`abbr_v_${i}`];
-            if (k && v && new RegExp(`\\b${k}\\b`, 'i').test(text)) {
-                foundAbbrs.push(`<b>${k}</b>: ${v}`);
+            const safeK = k ? k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+            if (k && v && new RegExp(`\\b${safeK}\\b`, 'i').test(text)) {
+                foundAbbrs.push(`<b>${escapeHtml(k)}</b>: ${escapeHtml(v)}`);
             }
         }
         if (foundAbbrs.length > 0) {
             tooltip.innerHTML = foundAbbrs.join('<br>');
             tooltip.style.display = 'block';
-            tooltip.style.left = (e.pageX / 1.1) + 'px';
-            tooltip.style.top  = ((e.pageY / 1.1) + 20) + 'px';
+            tooltip.style.left = (e.clientX + window.scrollX) + 'px';
+            tooltip.style.top  = (e.clientY + window.scrollY + 20) + 'px';
         } else { tooltip.style.display = 'none'; }
     });
 });
@@ -1289,6 +1300,7 @@ function initEventDelegation() {
     mainGrid.addEventListener('dragstart',   handleMainGridDragStart);
     mainGrid.addEventListener('dragover',    handleMainGridDragOver);
     mainGrid.addEventListener('drop',        handleMainGridDrop);
+    mainGrid.addEventListener('dragend',     () => { store.draggedTask = null; });
     mainGrid.addEventListener('keydown',     handleMainGridKeydown);
 
     const habitContainer = document.getElementById('habit-container');
@@ -1414,6 +1426,58 @@ function handleMonthlyModalChange(e) {
 }
 
 // ============================================================
+// TEST HOOKS — expose internals for property-based testing
+// Used by tests/bug-condition.test.html and tests/preservation.test.html.
+// ============================================================
+window.store        = store;
+window.escapeHtml   = escapeHtml;
+window.showTooltip  = showTooltip;
+window.hideTooltip  = hideTooltip;
+window.dropTask     = dropTask;
+window.sortTasks    = sortTasks;
+window.saveData     = saveData;
+window.loadWeekData = loadWeekData;
+window.calculateWeekIds = calculateWeekIds;
+window.openNoteModal    = openNoteModal;
+window.closeNoteModal   = closeNoteModal;
+window.openAbbrModal    = openAbbrModal;
+window.closeAbbrModal   = closeAbbrModal;
+window.openMonthlyModal    = openMonthlyModal;
+window.closeMonthlyModal   = closeMonthlyModal;
+window.openMonthPickerModal  = openMonthPickerModal;
+window.closeMonthPickerModal = closeMonthPickerModal;
+
+// Legacy aliases used by preservation.test.html (performance-optimization style)
+// These proxy to store properties so tests can read/write them directly.
+Object.defineProperty(window, 'appData', {
+    get() { return store.appData; },
+    set(v) { store.appData = v; },
+    configurable: true
+});
+Object.defineProperty(window, 'viewingWeekId', {
+    get() { return store.viewingWeekId; },
+    set(v) { store.viewingWeekId = v; },
+    configurable: true
+});
+Object.defineProperty(window, 'viewingMonthId', {
+    get() { return store.viewingMonthId; },
+    set(v) { store.viewingMonthId = v; },
+    configurable: true
+});
+Object.defineProperty(window, 'activeModalCount', {
+    get() { return store.activeModalCount; },
+    set(v) {
+        // Adjust internal counter to match desired value
+        const diff = v - store.activeModalCount;
+        if (diff > 0) { for (let i = 0; i < diff; i++) store.openModal(); }
+        else if (diff < 0) { for (let i = 0; i < -diff; i++) store.closeModal(); }
+    },
+    configurable: true
+});
+
+// ============================================================
 // Close IIFE
 // ============================================================
 })();
+
+
