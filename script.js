@@ -1,99 +1,175 @@
-﻿﻿﻿﻿﻿const sUrl = 'https://bqrscbyuzqvdqvrvhlzn.supabase.co';
-const sKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxcnNjYnl1enF2ZHF2cnZobHpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODc0MzQsImV4cCI6MjA4ODY2MzQzNH0.UpRpCxKWGtWzvqndTSnjQEShXa8f54T1KqLM8jWhumE';
-const sbClient = window.supabase.createClient(sUrl, sKey);
-let currentUser = null;
+﻿﻿// ============================================================
+// WEEKLY PLAN DASHBOARD — script.js
+// Architecture: IIFE module with centralized state store
+// ============================================================
+(function () {
+'use strict';
 
-const daysData = [
-    { name: "Monday", bg: "var(--day-yellow)", stroke: "var(--stroke-yellow)" },
-    { name: "Tuesday", bg: "var(--day-green)", stroke: "var(--stroke-green)" },
-    { name: "Wednesday", bg: "var(--day-blue)", stroke: "var(--stroke-blue)" },
-    { name: "Thursday", bg: "var(--day-yellow)", stroke: "var(--stroke-yellow)" },
-    { name: "Friday", bg: "var(--day-green)", stroke: "var(--stroke-green)" },
-    { name: "Saturday", bg: "var(--day-blue)", stroke: "var(--stroke-blue)" },
-    { name: "Sunday", bg: "var(--day-orange)", stroke: "var(--stroke-bright-orange)" }
+// ============================================================
+// 1. SUPABASE CLIENT (credentials from config.js)
+// ============================================================
+const sbClient = window.supabase.createClient(
+    window.APP_CONFIG.supabaseUrl,
+    window.APP_CONFIG.supabaseKey
+);
+
+// ============================================================
+// 2. CONSTANTS (immutable config)
+// ============================================================
+const DAYS_DATA = [
+    { name: "Monday",    bg: "var(--day-yellow)", stroke: "var(--stroke-yellow)" },
+    { name: "Tuesday",   bg: "var(--day-green)",  stroke: "var(--stroke-green)"  },
+    { name: "Wednesday", bg: "var(--day-blue)",   stroke: "var(--stroke-blue)"   },
+    { name: "Thursday",  bg: "var(--day-yellow)", stroke: "var(--stroke-yellow)" },
+    { name: "Friday",    bg: "var(--day-green)",  stroke: "var(--stroke-green)"  },
+    { name: "Saturday",  bg: "var(--day-blue)",   stroke: "var(--stroke-blue)"   },
+    { name: "Sunday",    bg: "var(--day-orange)", stroke: "var(--stroke-bright-orange)" }
 ];
+const DAY_KEYS      = ["M", "T", "W", "T", "F", "S", "S"];
+const TASKS_PER_DAY = 10;
+const HABITS_COUNT  = 5;
+const SVG_NS        = 'http://www.w3.org/2000/svg';
 
-const dayKeys = ["M", "T", "W", "T", "F", "S", "S"];
-const tasksPerDay = 10;
-const habitsCount = 5;
-let dailyPercents = [0, 0, 0, 0, 0, 0, 0];
-let dailyStats = Array(7).fill({done: 0, total: 0});
-let weekDates = [];
+// ============================================================
+// 3. CENTRALIZED STATE STORE
+// All mutable state lives here. External code reads/writes
+// only through the exported API (store.*).
+// ============================================================
+const store = (() => {
+    let _currentUser      = null;
+    let _appData          = { weeks: {}, monthly: {}, abbrs: {} };
+    let _state            = { tasks: {}, habits: {}, notes: {} };
+    let _currentRealWeekId = '';
+    let _viewingWeekId    = '';
+    let _viewingMonthId   = '';
+    let _currentMonthId   = '';
+    let _isViewingNextWeek = false;
+    let _weekDates        = [];
+    let _dailyPercents    = [0, 0, 0, 0, 0, 0, 0];
+    let _dailyStats       = Array(7).fill(null).map(() => ({ done: 0, total: 0 }));
+    let _activeModalCount = 0;
+    let _currentRightClickDay  = null;
+    let _currentRightClickTask = null;
+    let _draggedTaskInfo  = null;
 
-let currentRealWeekId = "";
-let viewingWeekId = "";
-let isViewingNextWeek = false;
-let currentMonthId = "";   // format: "YYYY-MM"
-let viewingMonthId = "";   // tháng đang xem trong Monthly Summary / Month Picker
+    return {
+        // currentUser
+        get currentUser()      { return _currentUser; },
+        set currentUser(v)     { _currentUser = v; },
+        // appData
+        get appData()          { return _appData; },
+        set appData(v)         { _appData = v; },
+        // _state (in-memory DOM mirror)
+        get state()            { return _state; },
+        resetState()           { _state = { tasks: {}, habits: {}, notes: {} }; },
+        // week/month IDs
+        get currentRealWeekId()     { return _currentRealWeekId; },
+        set currentRealWeekId(v)    { _currentRealWeekId = v; },
+        get viewingWeekId()         { return _viewingWeekId; },
+        set viewingWeekId(v)        { _viewingWeekId = v; },
+        get viewingMonthId()        { return _viewingMonthId; },
+        set viewingMonthId(v)       { _viewingMonthId = v; },
+        get currentMonthId()        { return _currentMonthId; },
+        set currentMonthId(v)       { _currentMonthId = v; },
+        get isViewingNextWeek()     { return _isViewingNextWeek; },
+        set isViewingNextWeek(v)    { _isViewingNextWeek = v; },
+        // weekDates
+        get weekDates()        { return _weekDates; },
+        set weekDates(v)       { _weekDates = v; },
+        // chart data
+        get dailyPercents()    { return _dailyPercents; },
+        set dailyPercents(v)   { _dailyPercents = v; },
+        get dailyStats()       { return _dailyStats; },
+        set dailyStats(v)      { _dailyStats = v; },
+        // modal counter
+        get activeModalCount() { return _activeModalCount; },
+        openModal()            { _activeModalCount++; },
+        closeModal()           { _activeModalCount = Math.max(0, _activeModalCount - 1); },
+        // right-click context
+        get rightClickDay()    { return _currentRightClickDay; },
+        get rightClickTask()   { return _currentRightClickTask; },
+        setRightClick(d, t)    { _currentRightClickDay = d; _currentRightClickTask = t; },
+        // drag info
+        get draggedTask()      { return _draggedTaskInfo; },
+        set draggedTask(v)     { _draggedTaskInfo = v; },
+    };
+})();
 
-let appData = { weeks: {}, monthly: {}, abbrs: {} };
-let saveTimeout;
+// ============================================================
+// 4. DEBOUNCE / THROTTLE CENTRE
+// ============================================================
+const scheduler = (() => {
+    let _uiTimer  = null;
+    let _saveTimer = null;
+    let _saveGlobalTimer = null;
 
-let currentRightClickDay = null;
-let currentRightClickTask = null;
-let draggedTaskInfo = null;
-let activeModalCount = 0;
+    return {
+        /** Schedule a single rAF-batched UI update for one day column */
+        uiUpdate(dIdx) {
+            if (_uiTimer) cancelAnimationFrame(_uiTimer);
+            _uiTimer = requestAnimationFrame(() => {
+                updateDay(dIdx);
+                updateWeeklySummary();
+                drawWaveChart();
+                _uiTimer = null;
+            });
+        },
+        /** Debounce save: 400 ms after last keystroke */
+        save() {
+            clearTimeout(_saveTimer);
+            _saveTimer = setTimeout(() => saveData(), 400);
+        },
+        /** Debounce Supabase push: 1500 ms */
+        globalSave(fn) {
+            clearTimeout(_saveGlobalTimer);
+            _saveGlobalTimer = setTimeout(fn, 1500);
+        }
+    };
+})();
 
-// --- Debounce helpers ---
-let _uiUpdateTimer = null;
-let _saveTimer = null;
 
-// --- In-memory state mirror (Bug 1 fix) ---
-// Mirrors all task/habit/note fields so saveData() never needs to scan the DOM.
-let _state = { tasks: {}, habits: {}, notes: {} };
-
-/** Update a single task field in _state */
+// ============================================================
+// 5. STATE HELPERS
+// ============================================================
 function _stateSetTask(d, t, field, value) {
-    _state.tasks[`t_${field}_${d}_${t}`] = value;
+    store.state.tasks[`t_${field}_${d}_${t}`] = value;
 }
 
-/** Populate _state from the current DOM (called after loadWeekData) */
 function _syncStateFromDOM() {
-    _state = { tasks: {}, habits: {}, notes: {} };
+    store.resetState();
+    const s = store.state;
     for (let d = 0; d < 7; d++) {
-        for (let t = 0; t < tasksPerDay; t++) {
-            _state.tasks[`t_name_${d}_${t}`]    = (document.getElementById(`t_name_${d}_${t}`)    || {}).value || '';
-            _state.tasks[`t_h_start_${d}_${t}`] = (document.getElementById(`t_h_start_${d}_${t}`) || {}).value || '';
-            _state.tasks[`t_m_start_${d}_${t}`] = (document.getElementById(`t_m_start_${d}_${t}`) || {}).value || '';
-            _state.tasks[`t_h_end_${d}_${t}`]   = (document.getElementById(`t_h_end_${d}_${t}`)   || {}).value || '';
-            _state.tasks[`t_m_end_${d}_${t}`]   = (document.getElementById(`t_m_end_${d}_${t}`)   || {}).value || '';
-            _state.tasks[`t_check_${d}_${t}`]   = (document.getElementById(`t_check_${d}_${t}`)   || {}).checked || false;
-            _state.tasks[`t_pri_${d}_${t}`]     = (document.getElementById(`task_div_${d}_${t}`)  || { getAttribute: () => '3' }).getAttribute('data-priority') || '3';
-            _state.tasks[`t_delay_${d}_${t}`]   = (document.getElementById(`task_div_${d}_${t}`)  || { getAttribute: () => '0' }).getAttribute('data-delay') || '0';
+        for (let t = 0; t < TASKS_PER_DAY; t++) {
+            s.tasks[`t_name_${d}_${t}`]    = (document.getElementById(`t_name_${d}_${t}`)    || {}).value   || '';
+            s.tasks[`t_h_start_${d}_${t}`] = (document.getElementById(`t_h_start_${d}_${t}`) || {}).value   || '';
+            s.tasks[`t_m_start_${d}_${t}`] = (document.getElementById(`t_m_start_${d}_${t}`) || {}).value   || '';
+            s.tasks[`t_h_end_${d}_${t}`]   = (document.getElementById(`t_h_end_${d}_${t}`)   || {}).value   || '';
+            s.tasks[`t_m_end_${d}_${t}`]   = (document.getElementById(`t_m_end_${d}_${t}`)   || {}).value   || '';
+            s.tasks[`t_check_${d}_${t}`]   = (document.getElementById(`t_check_${d}_${t}`)   || {}).checked || false;
+            s.tasks[`t_pri_${d}_${t}`]     = (document.getElementById(`task_div_${d}_${t}`)  || { getAttribute: () => '3' }).getAttribute('data-priority') || '3';
+            s.tasks[`t_delay_${d}_${t}`]   = (document.getElementById(`task_div_${d}_${t}`)  || { getAttribute: () => '0' }).getAttribute('data-delay')    || '0';
         }
     }
-    for (let h = 0; h < habitsCount; h++) {
-        _state.habits[`h_name_${h}`] = (document.getElementById(`h_name_${h}`) || {}).value || '';
+    for (let h = 0; h < HABITS_COUNT; h++) {
+        s.habits[`h_name_${h}`] = (document.getElementById(`h_name_${h}`) || {}).value || '';
         for (let d = 0; d < 7; d++) {
-            _state.habits[`h_check_${h}_${d}`] = (document.getElementById(`h_check_${h}_${d}`) || {}).checked || false;
+            s.habits[`h_check_${h}_${d}`] = (document.getElementById(`h_check_${h}_${d}`) || {}).checked || false;
         }
     }
     for (let i = 1; i <= 10; i++) {
         const el = document.getElementById(`note_input_${i}`);
-        _state.notes[`note_${i}`] = el ? el.value : '';
+        s.notes[`note_${i}`] = el ? el.value : '';
     }
 }
 
-function scheduleUIUpdate(dIdx) {
-    if (_uiUpdateTimer) cancelAnimationFrame(_uiUpdateTimer);
-    _uiUpdateTimer = requestAnimationFrame(() => {
-        updateDay(dIdx);
-        updateWeeklySummary();
-        drawWaveChart();
-        _uiUpdateTimer = null;
-    });
-}
-
-function scheduleSave() {
-    clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(() => saveData(), 400);
-}
-
+// ============================================================
+// 6. AUTH & DATA PERSISTENCE
+// ============================================================
 async function checkAuth() {
     try {
         const { data: { session } } = await sbClient.auth.getSession();
         if (session) {
-            currentUser = session.user;
+            store.currentUser = session.user;
             document.getElementById('auth-overlay').style.display = 'none';
             document.getElementById('sync-loading-screen').style.display = 'flex';
             await loadGlobalDataFromDB();
@@ -106,7 +182,7 @@ async function checkAuth() {
         hideSyncScreen();
         showNetworkError('Cannot connect. Working offline.');
         const saved = localStorage.getItem('plan_app_data');
-        if (saved) { appData = JSON.parse(saved); continueInit(); }
+        if (saved) { store.appData = JSON.parse(saved); continueInit(); }
         else { document.getElementById('auth-overlay').style.display = 'flex'; }
     }
 }
@@ -117,29 +193,27 @@ function hideSyncScreen() {
 }
 
 function showNetworkError(msg) {
-    let banner = document.getElementById('network-error-banner');
-    if (!banner) {
-        banner = document.createElement('div');
-        banner.id = 'network-error-banner';
-        banner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:#D32F2F;color:#fff;text-align:center;padding:10px;font-weight:700;font-size:13px;z-index:99999;';
-        banner.innerHTML = msg + ' <button onclick="this.parentElement.remove()" style="margin-left:12px;background:rgba(255,255,255,0.25);border:none;color:#fff;padding:2px 10px;border-radius:4px;cursor:pointer;font-weight:700;">✕</button>';
-        document.body.prepend(banner);
-    }
+    if (document.getElementById('network-error-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'network-error-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:#D32F2F;color:#fff;text-align:center;padding:10px;font-weight:700;font-size:13px;z-index:99999;';
+    const closeBtn = document.createElement('button');
+    closeBtn.style.cssText = 'margin-left:12px;background:rgba(255,255,255,0.25);border:none;color:#fff;padding:2px 10px;border-radius:4px;cursor:pointer;font-weight:700;';
+    closeBtn.textContent = '✕';
+    closeBtn.onclick = () => banner.remove();
+    banner.textContent = msg + ' ';
+    banner.appendChild(closeBtn);
+    document.body.prepend(banner);
 }
 
 async function handleLogin() {
-    const email = document.getElementById('auth-email').value;
+    const email    = document.getElementById('auth-email').value;
     const password = document.getElementById('auth-password').value;
-    const msg = document.getElementById('auth-msg');
-    msg.innerText = "Checking...";
-    
-    const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
-    if (error) {
-        msg.innerText = "Invalid email or password.";
-    } else {
-        msg.innerText = "";
-        location.reload(); 
-    }
+    const msg      = document.getElementById('auth-msg');
+    msg.innerText  = 'Checking...';
+    const { error } = await sbClient.auth.signInWithPassword({ email, password });
+    if (error) { msg.innerText = 'Invalid email or password.'; }
+    else { msg.innerText = ''; location.reload(); }
 }
 
 async function handleLogout() {
@@ -148,168 +222,188 @@ async function handleLogout() {
 }
 
 async function loadGlobalDataFromDB() {
-    if (!currentUser) return;
+    if (!store.currentUser) return;
     let timeout;
     try {
         const controller = new AbortController();
         timeout = setTimeout(() => controller.abort(), 5000);
-        const { data, error } = await sbClient.from('user_plans').select('plan_data').eq('user_id', currentUser.id).single();
+        const { data } = await sbClient.from('user_plans').select('plan_data').eq('user_id', store.currentUser.id).single();
         clearTimeout(timeout);
         if (data && data.plan_data) {
-            appData = data.plan_data;
-            localStorage.setItem('plan_app_data', JSON.stringify(appData));
+            store.appData = data.plan_data;
+            localStorage.setItem('plan_app_data', JSON.stringify(store.appData));
         } else {
             const saved = localStorage.getItem('plan_app_data');
-            if (saved) appData = JSON.parse(saved);
+            if (saved) store.appData = JSON.parse(saved);
         }
     } catch (err) {
         clearTimeout(timeout);
         hideSyncScreen();
         showNetworkError('Network error. Loaded from local cache.');
         const saved = localStorage.getItem('plan_app_data');
-        if (saved) appData = JSON.parse(saved);
+        if (saved) store.appData = JSON.parse(saved);
     }
-    if (!appData.weeks) appData.weeks = {};
-    if (!appData.monthly) appData.monthly = {};
-    if (!appData.abbrs) appData.abbrs = {};
+    const d = store.appData;
+    if (!d.weeks)   d.weeks   = {};
+    if (!d.monthly) d.monthly = {};
+    if (!d.abbrs)   d.abbrs   = {};
 }
 
 function saveGlobalData() {
-    localStorage.setItem('plan_app_data', JSON.stringify(appData));
-    if (currentUser) {
-        clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(async () => {
-            try {
-                const { error } = await sbClient.from('user_plans').upsert({ user_id: currentUser.id, plan_data: appData });
-                if (!error) {
-                    const toast = document.getElementById('save-toast');
-                    toast.classList.add('show');
-                    setTimeout(() => toast.classList.remove('show'), 2000);
-                } else {
-                    showNetworkError('Save failed. Data kept locally.');
-                }
-            } catch (err) {
-                showNetworkError('Offline. Changes saved locally.');
+    localStorage.setItem('plan_app_data', JSON.stringify(store.appData));
+    if (!store.currentUser) return;
+    scheduler.globalSave(async () => {
+        try {
+            const { error } = await sbClient.from('user_plans').upsert({
+                user_id: store.currentUser.id,
+                plan_data: store.appData
+            });
+            if (!error) {
+                const toast = document.getElementById('save-toast');
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 2000);
+            } else {
+                showNetworkError('Save failed. Data kept locally.');
             }
-        }, 1500);
-    }
+        } catch (err) {
+            showNetworkError('Offline. Changes saved locally.');
+        }
+    });
 }
 
-window.onload = checkAuth;
-
-function renameUser(e) {
-    e.preventDefault();
-    let currentName = localStorage.getItem('dashboard_username') || "Name";
-    let newName = prompt("Enter your name:", currentName);
-    if (newName !== null && newName.trim() !== "") {
-        localStorage.setItem('dashboard_username', newName.trim());
-        document.getElementById('greeting-text').innerText = `Hi ${newName.trim()} !!`;
-    }
+function saveData() {
+    _syncStateFromDOM();
+    const s = store.state;
+    store.appData.weeks[store.viewingWeekId] = {
+        tasks:  Object.assign({}, s.tasks),
+        habits: Object.assign({}, s.habits),
+        notes:  Object.assign({}, s.notes)
+    };
+    saveGlobalData();
 }
 
-function initNotesUI() {
-    const container = document.getElementById('notes-container');
-    container.innerHTML = '';
-    const fragment = document.createDocumentFragment();
+function loadWeekData() {
+    const wData = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {}, notes: {} };
+    for (let d = 0; d < 7; d++) {
+        for (let t = 0; t < TASKS_PER_DAY; t++) {
+            document.getElementById(`t_name_${d}_${t}`).value    = wData.tasks[`t_name_${d}_${t}`]    || '';
+            document.getElementById(`t_h_start_${d}_${t}`).value = wData.tasks[`t_h_start_${d}_${t}`] || '';
+            document.getElementById(`t_m_start_${d}_${t}`).value = wData.tasks[`t_m_start_${d}_${t}`] || '';
+            document.getElementById(`t_h_end_${d}_${t}`).value   = wData.tasks[`t_h_end_${d}_${t}`]   || '';
+            document.getElementById(`t_m_end_${d}_${t}`).value   = wData.tasks[`t_m_end_${d}_${t}`]   || '';
+            document.getElementById(`t_check_${d}_${t}`).checked = wData.tasks[`t_check_${d}_${t}`]   || false;
+            document.getElementById(`task_div_${d}_${t}`).setAttribute('data-priority', wData.tasks[`t_pri_${d}_${t}`]   || '3');
+            document.getElementById(`task_div_${d}_${t}`).setAttribute('data-delay',    wData.tasks[`t_delay_${d}_${t}`] || '0');
+        }
+        sortTasks(d);
+    }
+    for (let h = 0; h < HABITS_COUNT; h++) {
+        const hName = document.getElementById(`h_name_${h}`);
+        hName.value = wData.habits[`h_name_${h}`] || '';
+        autoResizeTextarea(hName);
+        for (let d = 0; d < 7; d++) {
+            document.getElementById(`h_check_${h}_${d}`).checked = wData.habits[`h_check_${h}_${d}`] || false;
+        }
+    }
     for (let i = 1; i <= 10; i++) {
-        const row = document.createElement('div');
-        row.className = 'note-row';
-        const label = document.createElement('label');
-        label.textContent = `${i}.`;
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.id = `note_input_${i}`;
-        input.placeholder = '...';
-        row.appendChild(label);
-        row.appendChild(input);
-        fragment.appendChild(row);
+        const el = document.getElementById(`note_input_${i}`);
+        if (el) el.value = wData.notes?.[`note_${i}`] || '';
     }
-    container.appendChild(fragment);
+    _syncStateFromDOM();
 }
 
-function initAbbrUI() {
-    const container = document.getElementById('abbr-container');
-    container.innerHTML = '';
-    const fragment = document.createDocumentFragment();
-    for (let i = 1; i <= 10; i++) {
-        const row = document.createElement('div');
-        row.className = 'abbr-row';
-        const kInput = document.createElement('input');
-        kInput.type = 'text';
-        kInput.id = `abbr_k_${i}`;
-        kInput.placeholder = '';
-        const vInput = document.createElement('input');
-        vInput.type = 'text';
-        vInput.id = `abbr_v_${i}`;
-        vInput.placeholder = '';
-        row.appendChild(kInput);
-        row.appendChild(vInput);
-        fragment.appendChild(row);
-    }
-    container.appendChild(fragment);
-    
-    for (let i = 1; i <= 10; i++) {
-        document.getElementById(`abbr_k_${i}`).value = appData.abbrs?.[`abbr_k_${i}`] || "";
-        document.getElementById(`abbr_v_${i}`).value = appData.abbrs?.[`abbr_v_${i}`] || "";
-    }
-}
-
-function saveAbbrData() {
-    appData.abbrs = appData.abbrs || {};
-    for(let i=1; i<=10; i++) {
-        appData.abbrs[`abbr_k_${i}`] = document.getElementById(`abbr_k_${i}`).value.trim();
-        appData.abbrs[`abbr_v_${i}`] = document.getElementById(`abbr_v_${i}`).value.trim();
+function saveMonthly() {
+    store.appData.monthly = store.appData.monthly || {};
+    for (let i = 1; i <= 3; i++) {
+        store.appData.monthly[`mg_${i}`]       = document.getElementById(`mg-${i}`).value;
+        store.appData.monthly[`gr_name_${i}`]  = document.getElementById(`gr-name-${i}`).value;
+        store.appData.monthly[`gr_target_${i}`]= document.getElementById(`gr-target-${i}`).value;
+        store.appData.monthly[`gr_actual_${i}`]= document.getElementById(`gr-actual-${i}`).value;
+        store.appData.monthly[`gr_status_${i}`]= document.getElementById(`gr-status-${i}`).value;
     }
     saveGlobalData();
 }
 
-// Event delegation cho tooltip - dùng throttle để tránh spam mousemove
-let _tooltipThrottle = null;
-document.addEventListener('mousemove', (e) => {
-    const tooltip = document.getElementById('abbr-tooltip');
-    if (!e.target || !e.target.classList.contains('t-name')) {
-        if (tooltip) tooltip.style.display = 'none';
-        return;
+function saveAbbrData() {
+    store.appData.abbrs = store.appData.abbrs || {};
+    for (let i = 1; i <= 10; i++) {
+        store.appData.abbrs[`abbr_k_${i}`] = document.getElementById(`abbr_k_${i}`).value.trim();
+        store.appData.abbrs[`abbr_v_${i}`] = document.getElementById(`abbr_v_${i}`).value.trim();
     }
-    if (_tooltipThrottle) return;
-    _tooltipThrottle = requestAnimationFrame(() => {
-        _tooltipThrottle = null;
-        const target = e.target;
-        if (target && target.classList.contains('t-name')) {
-            const text = target.value;
-            if (!text) { tooltip.style.display = 'none'; return; }
-            let foundAbbrs = [];
-            for (let i = 1; i <= 10; i++) {
-                const k = appData.abbrs?.[`abbr_k_${i}`];
-                const v = appData.abbrs?.[`abbr_v_${i}`];
-                if (k && v) {
-                    const regex = new RegExp(`\\b${k}\\b`, 'i');
-                    if (regex.test(text)) foundAbbrs.push(`<b>${k}</b>: ${v}`);
-                }
-            }
-            if (foundAbbrs.length > 0) {
-                tooltip.innerHTML = foundAbbrs.join('<br>');
-                tooltip.style.display = 'block';
-                tooltip.style.left = (e.pageX / 1.1) + 'px';
-                tooltip.style.top = ((e.pageY / 1.1) + 20) + 'px';
-            } else {
-                tooltip.style.display = 'none';
-            }
-        } else {
-            if (tooltip) tooltip.style.display = 'none';
-        }
-    });
-});
+    saveGlobalData();
+}
+
+
+// ============================================================
+// 7. DATE / WEEK UTILITIES
+// ============================================================
+function getMonday(d) {
+    const date = new Date(d);
+    const day  = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(date.getFullYear(), date.getMonth(), diff);
+}
+
+function formatDateKey(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function calculateWeekIds() {
+    const now        = new Date();
+    const thisMonday = getMonday(now);
+    store.currentRealWeekId = formatDateKey(thisMonday);
+    store.currentMonthId    = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    store.viewingMonthId    = store.currentMonthId;
+}
+
+function generateWeekDates(mondayStr) {
+    const parts  = mondayStr.split('-');
+    const monday = new Date(parts[0], parts[1] - 1, parts[2]);
+    const dates  = [];
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        const d = String(date.getDate()).padStart(2, '0');
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const y = date.getFullYear().toString().slice(-2);
+        dates.push(`${d}/${m}/${y}`);
+    }
+    store.weekDates = dates;
+}
+
+function getMonthWeeks() {
+    const [y, m] = store.viewingMonthId.split('-').map(Number);
+    const firstOfMonth = new Date(y, m - 1, 1);
+    const fmt = d => `${d.getDate()}/${d.getMonth() + 1}`;
+    const blocks = [];
+    let monday = getMonday(firstOfMonth);
+    for (let i = 0; i < 5; i++) {
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        const wId   = formatDateKey(monday);
+        const label = `${fmt(monday)}–${fmt(sunday)}`;
+        blocks.push({ wId: store.appData.weeks[wId] ? wId : null, label, mondayDate: new Date(monday) });
+        monday = new Date(monday);
+        monday.setDate(monday.getDate() + 7);
+    }
+    return blocks;
+}
+
+// ============================================================
+// 8. INIT & LIFECYCLE
+// ============================================================
+window.onload = checkAuth;
 
 function continueInit() {
     calculateWeekIds();
-    viewingWeekId = currentRealWeekId;
-    
-    if(!appData.weeks[viewingWeekId]) {
-        appData.weeks[viewingWeekId] = { tasks: {}, habits: {}, notes: {} };
+    store.viewingWeekId = store.currentRealWeekId;
+    if (!store.appData.weeks[store.viewingWeekId]) {
+        store.appData.weeks[store.viewingWeekId] = { tasks: {}, habits: {}, notes: {} };
     }
-
-    let savedName = localStorage.getItem('dashboard_username') || "Name";
+    const savedName = localStorage.getItem('dashboard_username') || 'Name';
     document.getElementById('greeting-text').innerText = `Hi ${savedName} !!`;
 
     initNotesUI();
@@ -323,69 +417,6 @@ function continueInit() {
     initEventDelegation();
 }
 
-function checkAndFocusToday() {
-    if (viewingWeekId !== currentRealWeekId) return;
-    if (sessionStorage.getItem('has_seen_focus') === 'true') return;
-    
-    const now = new Date();
-    const todayDay = now.getDay();
-    const todayIdx = todayDay === 0 ? 6 : todayDay - 1;
-    
-    const dayDiv = document.getElementById(`task_div_${todayIdx}_0`);
-    if (dayDiv) {
-        const dayGridItem = dayDiv.closest('.grid-item');
-        const backdrop = document.getElementById('focus-backdrop');
-        dayGridItem.classList.add('focused-day-card');
-        backdrop.style.display = 'block';
-        sessionStorage.setItem('has_seen_focus', 'true');
-    }
-}
-
-function closeFocus() {
-    document.getElementById('focus-backdrop').style.display = 'none';
-    const focusedEl = document.querySelector('.focused-day-card');
-    if (focusedEl) {
-        focusedEl.classList.remove('focused-day-card');
-    }
-}
-
-function getMonday(d) {
-    const date = new Date(d);
-    const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(date.getFullYear(), date.getMonth(), diff);
-}
-
-function formatDateKey(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
-
-function calculateWeekIds() {
-    const now = new Date();
-    const thisMonday = getMonday(now);
-    currentRealWeekId = formatDateKey(thisMonday);
-    currentMonthId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    viewingMonthId = currentMonthId;
-}
-
-function generateWeekDates(mondayStr) {
-    weekDates = [];
-    const parts = mondayStr.split('-');
-    const monday = new Date(parts[0], parts[1] - 1, parts[2]);
-    
-    for (let i = 0; i < 7; i++) {
-        const date = new Date(monday);
-        date.setDate(monday.getDate() + i);
-        const d = String(date.getDate()).padStart(2, '0');
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const y = date.getFullYear().toString().slice(-2);
-        weekDates.push(`${d}/${m}/${y}`);
-    }
-}
-
 function rebuildUI() {
     renderCalendar();
     document.getElementById('main-grid').querySelectorAll('.grid-item:nth-child(n+3)').forEach(e => e.remove());
@@ -394,79 +425,337 @@ function rebuildUI() {
     updateAll();
 }
 
-function renderCalendar() {
-    const parts = viewingWeekId.split('-');
-    const vDate = new Date(parts[0], parts[1] - 1, parts[2]);
-    generateWeekDates(viewingWeekId);
-    
-    const year = vDate.getFullYear(); const month = vDate.getMonth(); const today = new Date().getDate();
-    const isCurrentMonth = (new Date().getMonth() === month && new Date().getFullYear() === year);
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    document.getElementById('cal-month-year').innerText = `${monthNames[month]} ${year}`;
+function checkAndFocusToday() {
+    if (store.viewingWeekId !== store.currentRealWeekId) return;
+    if (sessionStorage.getItem('has_seen_focus') === 'true') return;
+    const now      = new Date();
+    const todayIdx = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    const dayDiv   = document.getElementById(`task_div_${todayIdx}_0`);
+    if (dayDiv) {
+        dayDiv.closest('.grid-item').classList.add('focused-day-card');
+        document.getElementById('focus-backdrop').style.display = 'block';
+        sessionStorage.setItem('has_seen_focus', 'true');
+    }
+}
 
-    const firstDay = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate();
-    let startDay = firstDay === 0 ? 6 : firstDay - 1;
+function closeFocus() {
+    document.getElementById('focus-backdrop').style.display = 'none';
+    const el = document.querySelector('.focused-day-card');
+    if (el) el.classList.remove('focused-day-card');
+}
 
-    const calGrid = document.getElementById('cal-grid-days');
-    calGrid.innerHTML = '';
+function renameUser(e) {
+    e.preventDefault();
+    const currentName = localStorage.getItem('dashboard_username') || 'Name';
+    const newName     = prompt('Enter your name:', currentName);
+    if (newName !== null && newName.trim() !== '') {
+        localStorage.setItem('dashboard_username', newName.trim());
+        document.getElementById('greeting-text').innerText = `Hi ${newName.trim()} !!`;
+    }
+}
+
+// ============================================================
+// 9. DOM RENDERING (DocumentFragment)
+// ============================================================
+function initNotesUI() {
+    const container = document.getElementById('notes-container');
+    container.innerHTML = '';
     const fragment = document.createDocumentFragment();
+    for (let i = 1; i <= 10; i++) {
+        const row   = document.createElement('div');
+        row.className = 'note-row';
+        const label = document.createElement('label');
+        label.textContent = `${i}.`;
+        const input = document.createElement('input');
+        input.type  = 'text';
+        input.id    = `note_input_${i}`;
+        input.placeholder = '...';
+        row.appendChild(label);
+        row.appendChild(input);
+        fragment.appendChild(row);
+    }
+    container.appendChild(fragment);
+}
+
+function initAbbrUI() {
+    const container = document.getElementById('abbr-container');
+    container.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    for (let i = 1; i <= 10; i++) {
+        const row    = document.createElement('div');
+        row.className = 'abbr-row';
+        const kInput = document.createElement('input');
+        kInput.type  = 'text';
+        kInput.id    = `abbr_k_${i}`;
+        const vInput = document.createElement('input');
+        vInput.type  = 'text';
+        vInput.id    = `abbr_v_${i}`;
+        row.appendChild(kInput);
+        row.appendChild(vInput);
+        fragment.appendChild(row);
+    }
+    container.appendChild(fragment);
+    for (let i = 1; i <= 10; i++) {
+        document.getElementById(`abbr_k_${i}`).value = store.appData.abbrs?.[`abbr_k_${i}`] || '';
+        document.getElementById(`abbr_v_${i}`).value = store.appData.abbrs?.[`abbr_v_${i}`] || '';
+    }
+}
+
+function renderCalendar() {
+    const parts   = store.viewingWeekId.split('-');
+    const vDate   = new Date(parts[0], parts[1] - 1, parts[2]);
+    generateWeekDates(store.viewingWeekId);
+    const year    = vDate.getFullYear();
+    const month   = vDate.getMonth();
+    const today   = new Date().getDate();
+    const isCurrentMonth = (new Date().getMonth() === month && new Date().getFullYear() === year);
+    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    document.getElementById('cal-month-year').innerText = `${monthNames[month]} ${year}`;
+    const firstDay    = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const startDay    = firstDay === 0 ? 6 : firstDay - 1;
+    const calGrid     = document.getElementById('cal-grid-days');
+    calGrid.innerHTML = '';
+    const fragment    = document.createDocumentFragment();
     for (let i = 0; i < startDay; i++) {
-        const el = document.createElement('div');
-        el.className = 'cal-date';
-        fragment.appendChild(el);
+        const el = document.createElement('div'); el.className = 'cal-date'; fragment.appendChild(el);
     }
     for (let i = 1; i <= daysInMonth; i++) {
-        const el = document.createElement('div');
-        el.className = 'cal-date';
-        if (i === today && isCurrentMonth && viewingWeekId === currentRealWeekId) el.classList.add('today');
+        const el = document.createElement('div'); el.className = 'cal-date';
+        if (i === today && isCurrentMonth && store.viewingWeekId === store.currentRealWeekId) el.classList.add('today');
         el.textContent = i;
         fragment.appendChild(el);
     }
     calGrid.appendChild(fragment);
 }
 
-function autoResizeTextarea(el) { el.style.height = '18px'; el.style.height = el.scrollHeight + 'px'; }
-
 function renderHabits() {
     const container = document.getElementById('habit-container');
     container.innerHTML = '';
     const fragment = document.createDocumentFragment();
-
-    // Header row
-    const headerHabit = document.createElement('div');
-    headerHabit.className = 'habit-header';
-    headerHabit.textContent = 'Habit';
-    fragment.appendChild(headerHabit);
-    dayKeys.forEach(d => {
-        const hd = document.createElement('div');
-        hd.className = 'habit-header';
-        hd.textContent = d;
+    const hHeader  = document.createElement('div');
+    hHeader.className = 'habit-header'; hHeader.textContent = 'Habit';
+    fragment.appendChild(hHeader);
+    DAY_KEYS.forEach(d => {
+        const hd = document.createElement('div'); hd.className = 'habit-header'; hd.textContent = d;
         fragment.appendChild(hd);
     });
-
-    // Habit rows
-    for (let h = 0; h < habitsCount; h++) {
-        const nameCell = document.createElement('div');
-        nameCell.className = 'h-name';
+    for (let h = 0; h < HABITS_COUNT; h++) {
+        const nameCell = document.createElement('div'); nameCell.className = 'h-name';
         const textarea = document.createElement('textarea');
-        textarea.className = 'habit-input';
-        textarea.id = `h_name_${h}`;
-        textarea.placeholder = '...';
-        textarea.rows = 1;
-        nameCell.appendChild(textarea);
-        fragment.appendChild(nameCell);
-
+        textarea.className = 'habit-input'; textarea.id = `h_name_${h}`; textarea.placeholder = '...'; textarea.rows = 1;
+        nameCell.appendChild(textarea); fragment.appendChild(nameCell);
         for (let d = 0; d < 7; d++) {
             const cell = document.createElement('div');
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.id = `h_check_${h}_${d}`;
-            cell.appendChild(cb);
-            fragment.appendChild(cell);
+            const cb   = document.createElement('input'); cb.type = 'checkbox'; cb.id = `h_check_${h}_${d}`;
+            cell.appendChild(cb); fragment.appendChild(cell);
         }
     }
     container.appendChild(fragment);
 }
+
+function createTaskElement(dIdx, tIdx) {
+    const taskDiv = document.createElement('div');
+    taskDiv.className = 'task-item';
+    taskDiv.id = `task_div_${dIdx}_${tIdx}`;
+    taskDiv.setAttribute('data-priority', '3');
+    taskDiv.setAttribute('data-delay', '0');
+
+    const dragZone = document.createElement('div');
+    dragZone.className = 'task-drag-zone'; dragZone.draggable = true; dragZone.title = 'Drag to move';
+    const starIcon = document.createElement('div'); starIcon.className = 'task-star-icon'; starIcon.textContent = '⭐';
+    const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = `t_check_${dIdx}_${tIdx}`;
+    dragZone.appendChild(starIcon); dragZone.appendChild(checkbox);
+
+    const inputContainer = document.createElement('div'); inputContainer.className = 'task-input-container';
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text'; nameInput.id = `t_name_${dIdx}_${tIdx}`; nameInput.className = 't-name'; nameInput.placeholder = '';
+
+    const timeWrapper = document.createElement('div'); timeWrapper.className = 'time-input-wrapper';
+    const mkPart = (field) => {
+        const inp = document.createElement('input');
+        inp.type = 'text'; inp.id = `t_${field}_${dIdx}_${tIdx}`; inp.className = 't-time-part'; inp.maxLength = 2; inp.placeholder = '--';
+        return inp;
+    };
+    const mkColon = () => { const s = document.createElement('span'); s.className = 'time-colon'; s.textContent = ':'; return s; };
+    const mkSep   = () => { const s = document.createElement('span'); s.className = 'time-separator'; s.textContent = '-'; return s; };
+    timeWrapper.appendChild(mkPart('h_start')); timeWrapper.appendChild(mkColon());
+    timeWrapper.appendChild(mkPart('m_start')); timeWrapper.appendChild(mkSep());
+    timeWrapper.appendChild(mkPart('h_end'));   timeWrapper.appendChild(mkColon());
+    timeWrapper.appendChild(mkPart('m_end'));
+    inputContainer.appendChild(nameInput); inputContainer.appendChild(timeWrapper);
+
+    const badge = document.createElement('span');
+    badge.className = 'delay-badge'; badge.id = `delay_badge_${dIdx}_${tIdx}`; badge.style.display = 'none';
+
+    taskDiv.appendChild(dragZone); taskDiv.appendChild(inputContainer); taskDiv.appendChild(badge);
+    return taskDiv;
+}
+
+function renderDays() {
+    const mainContainer = document.getElementById('main-grid');
+    const fragment = document.createDocumentFragment();
+    DAYS_DATA.forEach((dayObj, dIdx) => {
+        const gridItem  = document.createElement('div'); gridItem.className = 'grid-item';
+        const dayHeader = document.createElement('div');
+        dayHeader.className = 'day-header'; dayHeader.id = `day_header_${dIdx}`; dayHeader.style.backgroundColor = dayObj.bg;
+        const dayContent = document.createElement('div'); dayContent.className = 'day-content';
+
+        // Donut
+        const chartSection = document.createElement('div'); chartSection.className = 'chart-section';
+        const donut = document.createElement('div'); donut.className = 'daily-donut';
+        donut.innerHTML = `<svg width="70" height="70" viewBox="0 0 70 70"><circle class="circle-bg" cx="35" cy="35" r="28"></circle><circle id="circle_${dIdx}" class="circle-progress" cx="35" cy="35" r="28" style="stroke:${dayObj.stroke};"></circle></svg>`;
+        const pctText = document.createElement('div'); pctText.className = 'percent-text'; pctText.id = `pct_${dIdx}`; pctText.textContent = '0%';
+        donut.appendChild(pctText); chartSection.appendChild(donut);
+
+        // Stats row
+        const statsRow = document.createElement('div'); statsRow.className = 'stats-row';
+        [['Completed', `done_${dIdx}`], ['In Progress', `prog_${dIdx}`], ['Total', `total_${dIdx}`]].forEach(([label, id]) => {
+            const d = document.createElement('div'); d.innerHTML = `${label}<br><span id="${id}">0</span>`; statsRow.appendChild(d);
+        });
+
+        // Task list
+        const taskList = document.createElement('div'); taskList.className = 'task-list'; taskList.id = `task_list_${dIdx}`;
+        const tf = document.createDocumentFragment();
+        for (let t = 0; t < TASKS_PER_DAY; t++) tf.appendChild(createTaskElement(dIdx, t));
+        taskList.appendChild(tf);
+
+        // Progress bar
+        const pbc = document.createElement('div'); pbc.className = 'day-progress-bar-container';
+        const pb  = document.createElement('div'); pb.className = 'day-progress-bar'; pb.id = `day_prog_bar_${dIdx}`;
+        pbc.appendChild(pb);
+
+        dayContent.appendChild(chartSection); dayContent.appendChild(statsRow);
+        dayContent.appendChild(taskList); dayContent.appendChild(pbc);
+        gridItem.appendChild(dayHeader); gridItem.appendChild(dayContent);
+        fragment.appendChild(gridItem);
+    });
+    mainContainer.appendChild(fragment);
+}
+
+
+// ============================================================
+// 10. DRAG & DROP — state-first approach
+// Swap data in _state first, then write to DOM once, then sort.
+// ============================================================
+function dragStartTask(e, dIdx, tIdx) {
+    if (document.getElementById(`t_name_${dIdx}_${tIdx}`).value.trim() === '') { e.preventDefault(); return; }
+    store.draggedTask = { dIdx, tIdx };
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function dragOverTask(e) { e.preventDefault(); }
+
+/** Read one task's data from _state into a plain object */
+function _readTaskFromState(d, t) {
+    const s = store.state.tasks;
+    return {
+        name:    s[`t_name_${d}_${t}`]    || '',
+        hStart:  s[`t_h_start_${d}_${t}`] || '',
+        mStart:  s[`t_m_start_${d}_${t}`] || '',
+        hEnd:    s[`t_h_end_${d}_${t}`]   || '',
+        mEnd:    s[`t_m_end_${d}_${t}`]   || '',
+        checked: s[`t_check_${d}_${t}`]   || false,
+        pri:     s[`t_pri_${d}_${t}`]     || '3',
+        delay:   s[`t_delay_${d}_${t}`]   || '0',
+    };
+}
+
+/** Write a task data object into _state */
+function _writeTaskToState(d, t, data) {
+    const s = store.state.tasks;
+    s[`t_name_${d}_${t}`]    = data.name;
+    s[`t_h_start_${d}_${t}`] = data.hStart;
+    s[`t_m_start_${d}_${t}`] = data.mStart;
+    s[`t_h_end_${d}_${t}`]   = data.hEnd;
+    s[`t_m_end_${d}_${t}`]   = data.mEnd;
+    s[`t_check_${d}_${t}`]   = data.checked;
+    s[`t_pri_${d}_${t}`]     = data.pri;
+    s[`t_delay_${d}_${t}`]   = data.delay;
+}
+
+/** Flush one task from _state to DOM */
+function _flushTaskToDOM(d, t) {
+    const s = store.state.tasks;
+    document.getElementById(`t_name_${d}_${t}`).value    = s[`t_name_${d}_${t}`]    || '';
+    document.getElementById(`t_h_start_${d}_${t}`).value = s[`t_h_start_${d}_${t}`] || '';
+    document.getElementById(`t_m_start_${d}_${t}`).value = s[`t_m_start_${d}_${t}`] || '';
+    document.getElementById(`t_h_end_${d}_${t}`).value   = s[`t_h_end_${d}_${t}`]   || '';
+    document.getElementById(`t_m_end_${d}_${t}`).value   = s[`t_m_end_${d}_${t}`]   || '';
+    document.getElementById(`t_check_${d}_${t}`).checked = s[`t_check_${d}_${t}`]   || false;
+    const div = document.getElementById(`task_div_${d}_${t}`);
+    div.setAttribute('data-priority', s[`t_pri_${d}_${t}`]   || '3');
+    div.setAttribute('data-delay',    s[`t_delay_${d}_${t}`] || '0');
+}
+
+function dropTask(e, targetDayIdx) {
+    e.preventDefault();
+    if (!store.draggedTask) return;
+    const { dIdx: sourceDay, tIdx: sourceTask } = store.draggedTask;
+    store.draggedTask = null;
+    if (sourceDay === targetDayIdx) return;
+
+    // Find first empty slot in target day (check _state, not DOM)
+    let emptyIdx = -1;
+    for (let t = 0; t < TASKS_PER_DAY; t++) {
+        if (!(store.state.tasks[`t_name_${targetDayIdx}_${t}`] || '').trim()) { emptyIdx = t; break; }
+    }
+    if (emptyIdx === -1) { alert('Day is full. Cannot drag more tasks!'); return; }
+
+    // 1. Swap in _state first
+    const srcData = _readTaskFromState(sourceDay, sourceTask);
+    const emptyData = { name: '', hStart: '', mStart: '', hEnd: '', mEnd: '', checked: false, pri: '3', delay: '0' };
+    _writeTaskToState(targetDayIdx, emptyIdx, srcData);
+    _writeTaskToState(sourceDay, sourceTask, emptyData);
+
+    // 2. Flush to DOM
+    _flushTaskToDOM(targetDayIdx, emptyIdx);
+    _flushTaskToDOM(sourceDay, sourceTask);
+
+    // 3. Save & update UI
+    scheduler.save();
+    requestAnimationFrame(() => {
+        updateDay(sourceDay); updateDay(targetDayIdx); updateWeeklySummary(); drawWaveChart();
+    });
+    sortTasks(targetDayIdx); sortTasks(sourceDay);
+}
+
+function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
+    e.stopPropagation(); e.preventDefault();
+    if (!store.draggedTask) return;
+    const { dIdx: sDay, tIdx: sTask } = store.draggedTask;
+    if (sDay === targetDayIdx && sTask === targetTaskIdx) { store.draggedTask = null; return; }
+
+    const sPri = store.state.tasks[`t_pri_${sDay}_${sTask}`]               || '3';
+    const tPri = store.state.tasks[`t_pri_${targetDayIdx}_${targetTaskIdx}`] || '3';
+
+    if (sPri === tPri) {
+        // 1. Swap in _state first
+        const srcData = _readTaskFromState(sDay, sTask);
+        const tgtData = _readTaskFromState(targetDayIdx, targetTaskIdx);
+        _writeTaskToState(targetDayIdx, targetTaskIdx, srcData);
+        _writeTaskToState(sDay, sTask, tgtData);
+
+        // 2. Flush to DOM
+        _flushTaskToDOM(targetDayIdx, targetTaskIdx);
+        _flushTaskToDOM(sDay, sTask);
+
+        // 3. Save & update UI
+        scheduler.save();
+        scheduler.uiUpdate(sDay); scheduler.uiUpdate(targetDayIdx);
+        sortTasks(targetDayIdx);
+        if (sDay !== targetDayIdx) sortTasks(sDay);
+        store.draggedTask = null;
+    } else {
+        store.draggedTask = { dIdx: sDay, tIdx: sTask };
+        dropTask(e, targetDayIdx);
+    }
+}
+
+// ============================================================
+// 11. TASK LOGIC
+// ============================================================
+function autoResizeTextarea(el) { el.style.height = '18px'; el.style.height = el.scrollHeight + 'px'; }
 
 function formatTimeInput(el) {
     let val = el.value.trim().replace(/\D/g, '');
@@ -477,353 +766,61 @@ function formatTimeInput(el) {
 function focusTimeInput(d, t, idx) {
     const types = ['h_start', 'm_start', 'h_end', 'm_end'];
     const el = document.getElementById(`t_${types[idx]}_${d}_${t}`);
-    if (el) {
-        el.focus();
-        el.select();
-    }
+    if (el) { el.focus(); el.select(); }
 }
 
 function handleTimeNavigation(e, dIdx, tIdx, currentIdx) {
     const keysRight = ['ArrowRight', 'd', 'D'];
-    const keysLeft = ['ArrowLeft', 'a', 'A'];
-    
-    if (keysRight.includes(e.key)) {
-        e.preventDefault();
-        let nextIdx = currentIdx + 1;
-        if (nextIdx <= 3) focusTimeInput(dIdx, tIdx, nextIdx);
-    } else if (keysLeft.includes(e.key)) {
-        e.preventDefault();
-        let prevIdx = currentIdx - 1;
-        if (prevIdx >= 0) focusTimeInput(dIdx, tIdx, prevIdx);
-    }
-}
-
-function createTaskElement(dIdx, tIdx) {
-    const taskDiv = document.createElement('div');
-    taskDiv.className = 'task-item';
-    taskDiv.id = `task_div_${dIdx}_${tIdx}`;
-    taskDiv.setAttribute('data-priority', '3');
-    taskDiv.setAttribute('data-delay', '0');
-    taskDiv.setAttribute('ondrop', `dropOnTaskItem(event, ${dIdx}, ${tIdx})`);
-    taskDiv.setAttribute('ondragover', 'dragOverTask(event)');
-
-    // drag zone
-    const dragZone = document.createElement('div');
-    dragZone.className = 'task-drag-zone';
-    dragZone.draggable = true;
-    dragZone.title = 'Drag to move';
-
-    const starIcon = document.createElement('div');
-    starIcon.className = 'task-star-icon';
-    starIcon.textContent = '⭐';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.id = `t_check_${dIdx}_${tIdx}`;
-
-    dragZone.appendChild(starIcon);
-    dragZone.appendChild(checkbox);
-
-    // input container
-    const inputContainer = document.createElement('div');
-    inputContainer.className = 'task-input-container';
-
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.id = `t_name_${dIdx}_${tIdx}`;
-    nameInput.className = 't-name';
-    nameInput.placeholder = '';
-
-    const timeWrapper = document.createElement('div');
-    timeWrapper.className = 'time-input-wrapper';
-
-    function makeTimePart(fieldName, idx) {
-        const inp = document.createElement('input');
-        inp.type = 'text';
-        inp.id = `t_${fieldName}_${dIdx}_${tIdx}`;
-        inp.className = 't-time-part';
-        inp.maxLength = 2;
-        inp.placeholder = '--';
-        return inp;
-    }
-    function makeColon() { const s = document.createElement('span'); s.className = 'time-colon'; s.textContent = ':'; return s; }
-    function makeSep() { const s = document.createElement('span'); s.className = 'time-separator'; s.textContent = '-'; return s; }
-
-    timeWrapper.appendChild(makeTimePart('h_start', 0));
-    timeWrapper.appendChild(makeColon());
-    timeWrapper.appendChild(makeTimePart('m_start', 1));
-    timeWrapper.appendChild(makeSep());
-    timeWrapper.appendChild(makeTimePart('h_end', 2));
-    timeWrapper.appendChild(makeColon());
-    timeWrapper.appendChild(makeTimePart('m_end', 3));
-
-    inputContainer.appendChild(nameInput);
-    inputContainer.appendChild(timeWrapper);
-
-    // delay badge
-    const badge = document.createElement('span');
-    badge.className = 'delay-badge';
-    badge.id = `delay_badge_${dIdx}_${tIdx}`;
-    badge.style.display = 'none';
-
-    taskDiv.appendChild(dragZone);
-    taskDiv.appendChild(inputContainer);
-    taskDiv.appendChild(badge);
-    return taskDiv;
-}
-
-function renderDays() {
-    const mainContainer = document.getElementById('main-grid');
-    const fragment = document.createDocumentFragment();
-    
-    daysData.forEach((dayObj, dIdx) => {
-        const gridItem = document.createElement('div');
-        gridItem.className = 'grid-item';
-
-        // Day header
-        const dayHeader = document.createElement('div');
-        dayHeader.className = 'day-header';
-        dayHeader.id = `day_header_${dIdx}`;
-        dayHeader.style.backgroundColor = dayObj.bg;
-
-        // Day content
-        const dayContent = document.createElement('div');
-        dayContent.className = 'day-content';
-
-        // Donut chart
-        const chartSection = document.createElement('div');
-        chartSection.className = 'chart-section';
-        const donut = document.createElement('div');
-        donut.className = 'daily-donut';
-        donut.innerHTML = `<svg width="70" height="70" viewBox="0 0 70 70">
-            <circle class="circle-bg" cx="35" cy="35" r="28"></circle>
-            <circle id="circle_${dIdx}" class="circle-progress" cx="35" cy="35" r="28" style="stroke: ${dayObj.stroke};"></circle>
-        </svg>`;
-        const pctText = document.createElement('div');
-        pctText.className = 'percent-text';
-        pctText.id = `pct_${dIdx}`;
-        pctText.textContent = '0%';
-        donut.appendChild(pctText);
-        chartSection.appendChild(donut);
-
-        // Stats row
-        const statsRow = document.createElement('div');
-        statsRow.className = 'stats-row';
-        [['Completed', `done_${dIdx}`], ['In Progress', `prog_${dIdx}`], ['Total', `total_${dIdx}`]].forEach(([label, id]) => {
-            const d = document.createElement('div');
-            d.innerHTML = `${label}<br><span id="${id}">0</span>`;
-            statsRow.appendChild(d);
-        });
-
-        // Task list
-        const taskList = document.createElement('div');
-        taskList.className = 'task-list';
-        taskList.id = `task_list_${dIdx}`;
-        const taskFragment = document.createDocumentFragment();
-        for (let t = 0; t < tasksPerDay; t++) {
-            taskFragment.appendChild(createTaskElement(dIdx, t));
-        }
-        taskList.appendChild(taskFragment);
-
-        // Progress bar
-        const progBarContainer = document.createElement('div');
-        progBarContainer.className = 'day-progress-bar-container';
-        const progBar = document.createElement('div');
-        progBar.className = 'day-progress-bar';
-        progBar.id = `day_prog_bar_${dIdx}`;
-        progBarContainer.appendChild(progBar);
-
-        dayContent.appendChild(chartSection);
-        dayContent.appendChild(statsRow);
-        dayContent.appendChild(taskList);
-        dayContent.appendChild(progBarContainer);
-
-        gridItem.appendChild(dayHeader);
-        gridItem.appendChild(dayContent);
-        fragment.appendChild(gridItem);
-    });
-    
-    mainContainer.appendChild(fragment);
-}
-
-function dragStartTask(e, dIdx, tIdx) {
-    if (document.getElementById(`t_name_${dIdx}_${tIdx}`).value.trim() === "") { e.preventDefault(); return; }
-    draggedTaskInfo = { dIdx, tIdx };
-    e.dataTransfer.effectAllowed = "move";
-}
-
-function dragOverTask(e) { e.preventDefault(); }
-
-function dropTask(e, targetDayIdx) {
-    e.preventDefault();
-    if (!draggedTaskInfo) return;
-    const sourceDay = draggedTaskInfo.dIdx; const sourceTask = draggedTaskInfo.tIdx;
-    if (sourceDay === targetDayIdx) { draggedTaskInfo = null; return; }
-
-    const sInp = document.getElementById(`t_name_${sourceDay}_${sourceTask}`);
-    const sHStart = document.getElementById(`t_h_start_${sourceDay}_${sourceTask}`);
-    const sMStart = document.getElementById(`t_m_start_${sourceDay}_${sourceTask}`);
-    const sHEnd = document.getElementById(`t_h_end_${sourceDay}_${sourceTask}`);
-    const sMEnd = document.getElementById(`t_m_end_${sourceDay}_${sourceTask}`);
-    const sCb = document.getElementById(`t_check_${sourceDay}_${sourceTask}`);
-    const sDiv = document.getElementById(`task_div_${sourceDay}_${sourceTask}`);
-    const priority = sDiv.getAttribute('data-priority');
-    const delay = sDiv.getAttribute('data-delay');
-
-    let emptyTargetTaskIdx = -1;
-    for (let t = 0; t < tasksPerDay; t++) {
-        if (document.getElementById(`t_name_${targetDayIdx}_${t}`).value.trim() === "") { emptyTargetTaskIdx = t; break; }
-    }
-
-    if (emptyTargetTaskIdx !== -1) {
-        document.getElementById(`t_name_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sInp.value;
-        document.getElementById(`t_h_start_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sHStart.value;
-        document.getElementById(`t_m_start_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sMStart.value;
-        document.getElementById(`t_h_end_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sHEnd.value;
-        document.getElementById(`t_m_end_${targetDayIdx}_${emptyTargetTaskIdx}`).value = sMEnd.value;
-        document.getElementById(`t_check_${targetDayIdx}_${emptyTargetTaskIdx}`).checked = sCb.checked;
-        document.getElementById(`task_div_${targetDayIdx}_${emptyTargetTaskIdx}`).setAttribute('data-priority', priority);
-        document.getElementById(`task_div_${targetDayIdx}_${emptyTargetTaskIdx}`).setAttribute('data-delay', delay);
-
-        sInp.value = ""; sHStart.value = ""; sMStart.value = ""; sHEnd.value = ""; sMEnd.value = ""; 
-        sCb.checked = false; sDiv.setAttribute('data-priority', "3"); sDiv.setAttribute('data-delay', "0");
-
-        _syncStateFromDOM(); scheduleSave();
-        requestAnimationFrame(() => { updateDay(sourceDay); updateDay(targetDayIdx); updateWeeklySummary(); drawWaveChart(); });
-        sortTasks(targetDayIdx); sortTasks(sourceDay);
-    } else { alert("Day is full. Cannot drag more tasks!"); }
-    draggedTaskInfo = null;
-}
-
-function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
-    e.stopPropagation(); 
-    e.preventDefault();
-    if (!draggedTaskInfo) return;
-
-    const sDay = draggedTaskInfo.dIdx;
-    const sTask = draggedTaskInfo.tIdx;
-    if (sDay === targetDayIdx && sTask === targetTaskIdx) { draggedTaskInfo = null; return; }
-
-    const sDiv = document.getElementById(`task_div_${sDay}_${sTask}`);
-    const tDiv = document.getElementById(`task_div_${targetDayIdx}_${targetTaskIdx}`);
-
-    const sPri = sDiv.getAttribute('data-priority') || "3";
-    const tPri = tDiv.getAttribute('data-priority') || "3";
-
-    if (sPri === tPri) {
-        const sInp = document.getElementById(`t_name_${sDay}_${sTask}`);
-        const sHStart = document.getElementById(`t_h_start_${sDay}_${sTask}`);
-        const sMStart = document.getElementById(`t_m_start_${sDay}_${sTask}`);
-        const sHEnd = document.getElementById(`t_h_end_${sDay}_${sTask}`);
-        const sMEnd = document.getElementById(`t_m_end_${sDay}_${sTask}`);
-        const sCb = document.getElementById(`t_check_${sDay}_${sTask}`);
-        const sDelay = sDiv.getAttribute('data-delay');
-
-        const tInp = document.getElementById(`t_name_${targetDayIdx}_${targetTaskIdx}`);
-        const tHStart = document.getElementById(`t_h_start_${targetDayIdx}_${targetTaskIdx}`);
-        const tMStart = document.getElementById(`t_m_start_${targetDayIdx}_${targetTaskIdx}`);
-        const tHEnd = document.getElementById(`t_h_end_${targetDayIdx}_${targetTaskIdx}`);
-        const tMEnd = document.getElementById(`t_m_end_${targetDayIdx}_${targetTaskIdx}`);
-        const tCb = document.getElementById(`t_check_${targetDayIdx}_${targetTaskIdx}`);
-        const tDelay = tDiv.getAttribute('data-delay');
-
-        const tempText = tInp.value;
-        const tempHStart = tHStart.value;
-        const tempMStart = tMStart.value;
-        const tempHEnd = tHEnd.value;
-        const tempMEnd = tMEnd.value;
-        const tempCb = tCb.checked;
-        const tempDelay = tDelay;
-
-        tInp.value = sInp.value;
-        tHStart.value = sHStart.value;
-        tMStart.value = sMStart.value;
-        tHEnd.value = sHEnd.value;
-        tMEnd.value = sMEnd.value;
-        tCb.checked = sCb.checked;
-        tDiv.setAttribute('data-delay', sDelay);
-        tDiv.setAttribute('data-priority', sPri);
-
-        sInp.value = tempText;
-        sHStart.value = tempHStart;
-        sMStart.value = tempMStart;
-        sHEnd.value = tempHEnd;
-        sMEnd.value = tempMEnd;
-        sCb.checked = tempCb;
-        sDiv.setAttribute('data-delay', tempDelay);
-        sDiv.setAttribute('data-priority', tPri);
-
-        _syncStateFromDOM(); scheduleSave(); scheduleUIUpdate(sDay); scheduleUIUpdate(targetDayIdx);
-        sortTasks(targetDayIdx); 
-        if(sDay !== targetDayIdx) sortTasks(sDay);
-        
-        draggedTaskInfo = null;
-    } else {
-        dropTask(e, targetDayIdx);
-    }
+    const keysLeft  = ['ArrowLeft',  'a', 'A'];
+    if (keysRight.includes(e.key)) { e.preventDefault(); if (currentIdx < 3) focusTimeInput(dIdx, tIdx, currentIdx + 1); }
+    else if (keysLeft.includes(e.key)) { e.preventDefault(); if (currentIdx > 0) focusTimeInput(dIdx, tIdx, currentIdx - 1); }
 }
 
 function showContextMenu(e, dIdx, tIdx) {
     e.preventDefault();
     const menu = document.getElementById('priority-menu');
-    menu.style.display = 'block'; menu.style.left = (e.pageX / 1.1) + 'px'; menu.style.top = (e.pageY / 1.1) + 'px';
-    currentRightClickDay = dIdx; currentRightClickTask = tIdx;
+    menu.style.display = 'block';
+    menu.style.left = (e.pageX / 1.1) + 'px';
+    menu.style.top  = (e.pageY / 1.1) + 'px';
+    store.setRightClick(dIdx, tIdx);
 }
 
 function setPriority(level) {
-    if(currentRightClickDay !== null && currentRightClickTask !== null) {
-        const div = document.getElementById(`task_div_${currentRightClickDay}_${currentRightClickTask}`);
-        div.setAttribute('data-priority', level);
-        _state.tasks[`t_pri_${currentRightClickDay}_${currentRightClickTask}`] = level;
-        sortTasks(currentRightClickDay); scheduleSave();
-    }
+    const d = store.rightClickDay; const t = store.rightClickTask;
+    if (d === null || t === null) return;
+    const div = document.getElementById(`task_div_${d}_${t}`);
+    div.setAttribute('data-priority', level);
+    store.state.tasks[`t_pri_${d}_${t}`] = String(level);
+    sortTasks(d); scheduler.save();
 }
 
 function sortTasks(dIdx) {
-    const list = document.getElementById(`task_list_${dIdx}`);
+    const list  = document.getElementById(`task_list_${dIdx}`);
     const items = Array.from(list.querySelectorAll('.task-item'));
     items.sort((a, b) => {
-        let pa = a.getAttribute('data-priority'); let pb = b.getAttribute('data-priority');
-        let wa = pa === 'star' ? -1 : parseInt(pa || 3); let wb = pb === 'star' ? -1 : parseInt(pb || 3);
+        const pa = a.getAttribute('data-priority'); const pb = b.getAttribute('data-priority');
+        const wa = pa === 'star' ? -1 : parseInt(pa || 3);
+        const wb = pb === 'star' ? -1 : parseInt(pb || 3);
         return wa - wb;
     });
     items.forEach(item => list.appendChild(item));
 }
 
-function updateWeeklySummary() {
-    let weekCompleted = 0; let weekInProgress = 0;
-    
-    for(let d = 0; d < 7; d++) {
-        for(let t = 0; t < tasksPerDay; t++) {
-            const cb = document.getElementById(`t_check_${d}_${t}`);
-            const input = document.getElementById(`t_name_${d}_${t}`);
-            if (input && input.value.trim() !== "") {
-                if (cb && cb.checked) { weekCompleted++; } else { weekInProgress++; }
-            }
-        }
-    }
-    
-    document.getElementById('weekly-completed').innerText = weekCompleted;
-    document.getElementById('weekly-progress').innerText = weekInProgress;
-}
-
-function updateDayAndSave(dIdx) { scheduleSave(); scheduleUIUpdate(dIdx); }
+function updateDayAndSave(dIdx) { scheduler.save(); scheduler.uiUpdate(dIdx); }
 
 function updateDay(dIdx) {
     let done = 0; let totalActive = 0;
-    
-    const now = new Date();
-    const todayDay = now.getDay();
-    const todayIdx = todayDay === 0 ? 6 : todayDay - 1;
-    const isPast = (!isViewingNextWeek && dIdx < todayIdx);
-    
-    for(let t = 0; t < tasksPerDay; t++) {
-        const cb = document.getElementById(`t_check_${dIdx}_${t}`);
+    const now      = new Date();
+    const todayIdx = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    const isPast   = (!store.isViewingNextWeek && dIdx < todayIdx);
+
+    for (let t = 0; t < TASKS_PER_DAY; t++) {
+        const cb    = document.getElementById(`t_check_${dIdx}_${t}`);
         const input = document.getElementById(`t_name_${dIdx}_${t}`);
-        const div = document.getElementById(`task_div_${dIdx}_${t}`);
+        const div   = document.getElementById(`task_div_${dIdx}_${t}`);
         const badge = document.getElementById(`delay_badge_${dIdx}_${t}`);
-        const hasText = input.value.trim() !== "";
-        const delay = parseInt(div.getAttribute('data-delay')) || 0;
+        const hasText = input.value.trim() !== '';
+        const delay   = parseInt(div.getAttribute('data-delay')) || 0;
 
         if (!hasText && cb.checked) cb.checked = false;
         if (hasText) { totalActive++; if (cb.checked) done++; }
@@ -831,409 +828,381 @@ function updateDay(dIdx) {
 
         if (delay > 0 && !cb.checked && hasText) {
             if (delay > 3) {
-                badge.innerHTML = `⚠️ Evaluate`; badge.className = 'delay-badge delay-warning'; badge.title = "Task delayed > 3 days. Evaluate priority or cancel.";
+                badge.innerHTML = '⚠️ Evaluate'; badge.className = 'delay-badge delay-warning';
+                badge.title = 'Task delayed > 3 days. Evaluate priority or cancel.';
             } else {
-                const circled = ["", "❶", "❷", "❸"];
-                badge.innerHTML = circled[delay] || `+${delay}`; badge.className = 'delay-badge'; badge.title = "";
+                const circled = ['', '❶', '❷', '❸'];
+                badge.innerHTML = circled[delay] || `+${delay}`; badge.className = 'delay-badge'; badge.title = '';
             }
             badge.style.display = 'block';
-        } else {
-            badge.style.display = 'none';
-        }
+        } else { badge.style.display = 'none'; }
     }
 
     const percent = totalActive === 0 ? 0 : Math.round((done / totalActive) * 100);
-    dailyPercents[dIdx] = percent; dailyStats[dIdx] = { done, total: totalActive };
-    
-    let headerHtml = `${daysData[dIdx].name} (${weekDates[dIdx]})`;
-    if (isPast && done < totalActive && totalActive > 0 && activeModalCount === 0) {
-        headerHtml += `<span style="position: absolute; top: -16px; right: -5px; z-index: 9999; color: #D32F2F; font-size: 64px; font-weight: 900; transform: rotate(15deg); line-height: 1; font-family: 'Comic Sans MS', cursive; text-shadow: 2px 2px 0px rgba(255,255,255,0.8);">!!</span>`;
+    store.dailyPercents[dIdx] = percent;
+    store.dailyStats[dIdx]    = { done, total: totalActive };
+
+    let headerHtml = `${DAYS_DATA[dIdx].name} (${store.weekDates[dIdx]})`;
+    if (isPast && done < totalActive && totalActive > 0 && store.activeModalCount === 0) {
+        headerHtml += `<span style="position:absolute;top:-16px;right:-5px;z-index:9999;color:#D32F2F;font-size:64px;font-weight:900;transform:rotate(15deg);line-height:1;font-family:'Comic Sans MS',cursive;text-shadow:2px 2px 0px rgba(255,255,255,0.8);">!!</span>`;
     }
     document.getElementById(`day_header_${dIdx}`).innerHTML = headerHtml;
-
-    document.getElementById(`pct_${dIdx}`).innerText = percent + '%';
-    document.getElementById(`done_${dIdx}`).innerText = done;
-    document.getElementById(`prog_${dIdx}`).innerText = (totalActive - done);
-    document.getElementById(`total_${dIdx}`).innerText = totalActive; 
+    document.getElementById(`pct_${dIdx}`).innerText  = percent + '%';
+    document.getElementById(`done_${dIdx}`).innerText  = done;
+    document.getElementById(`prog_${dIdx}`).innerText  = totalActive - done;
+    document.getElementById(`total_${dIdx}`).innerText = totalActive;
 
     const gridItem = document.getElementById(`task_div_${dIdx}_0`).closest('.grid-item');
-    if (totalActive > 0 && done === totalActive) { gridItem.classList.add('daily-victory'); } 
-    else { gridItem.classList.remove('daily-victory'); }
+    if (totalActive > 0 && done === totalActive) gridItem.classList.add('daily-victory');
+    else gridItem.classList.remove('daily-victory');
 
     const circle = document.getElementById(`circle_${dIdx}`);
     const circumference = 2 * Math.PI * 28;
-    circle.style.strokeDasharray = circumference;
+    circle.style.strokeDasharray  = circumference;
     circle.style.strokeDashoffset = circumference - (circumference * percent / 100);
 
     const progBar = document.getElementById(`day_prog_bar_${dIdx}`);
     progBar.style.width = percent + '%';
-    if(percent >= 100) progBar.style.backgroundColor = `var(--success-green)`;
-    else progBar.style.backgroundColor = `hsl(122, ${percent}%, ${75 - (percent * 0.35)}%)`;
+    progBar.style.backgroundColor = percent >= 100
+        ? 'var(--success-green)'
+        : `hsl(122, ${percent}%, ${75 - percent * 0.35}%)`;
 }
 
-function updateAll() { for(let d = 0; d < 7; d++) updateDay(d); updateWeeklySummary(); drawWaveChart(); }
+function updateWeeklySummary() {
+    let weekCompleted = 0; let weekInProgress = 0;
+    for (let d = 0; d < 7; d++) {
+        for (let t = 0; t < TASKS_PER_DAY; t++) {
+            const cb    = document.getElementById(`t_check_${d}_${t}`);
+            const input = document.getElementById(`t_name_${d}_${t}`);
+            if (input && input.value.trim() !== '') {
+                if (cb && cb.checked) weekCompleted++; else weekInProgress++;
+            }
+        }
+    }
+    document.getElementById('weekly-completed').innerText = weekCompleted;
+    document.getElementById('weekly-progress').innerText  = weekInProgress;
+}
+
+function updateAll() { for (let d = 0; d < 7; d++) updateDay(d); updateWeeklySummary(); drawWaveChart(); }
+
+function updateRowStatus(id) {
+    const row    = document.getElementById(`gr-row-${id}`);
+    const select = document.getElementById(`gr-status-${id}`);
+    row.classList.remove('status-achieved', 'status-pending');
+    if (select.value === 'Achieved') row.classList.add('status-achieved');
+    else if (select.value === 'Pending') row.classList.add('status-pending');
+}
+
+
+// ============================================================
+// 12. SVG CHARTS — createElementNS (no innerHTML string building)
+// ============================================================
+function svgEl(tag, attrs) {
+    const el = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    return el;
+}
 
 function showTooltip(e, dayIndex) {
     const t = document.getElementById('chart-tooltip');
-    t.innerHTML = `${dailyStats[dayIndex].done}/${dailyStats[dayIndex].total} tasks completed`;
-    t.style.display = 'block'; t.style.left = (e.pageX / 1.1) + 'px'; t.style.top = ((e.pageY / 1.1) - 15) + 'px';
+    const s = store.dailyStats[dayIndex];
+    t.textContent = `${s.done}/${s.total} tasks completed`;
+    t.style.display = 'block';
+    t.style.left = (e.pageX / 1.1) + 'px';
+    t.style.top  = ((e.pageY / 1.1) - 15) + 'px';
 }
 function hideTooltip() { document.getElementById('chart-tooltip').style.display = 'none'; }
 
 function drawWaveChart() {
-    const width = 1000; const height = 90; const paddingX = 40; const gap = (width - paddingX * 2) / 6;
-    let points = []; let pointElements = '';
-    dailyPercents.forEach((pct, i) => {
-        const x = paddingX + i * gap; const y = height - 15 - (pct * 0.5); points.push({x, y});
-        pointElements += `<circle cx="${x}" cy="${y}" r="4.5" onmousemove="showTooltip(event, ${i})" onmouseleave="hideTooltip()"></circle>`;
-    });
+    const width = 1000; const height = 90; const paddingX = 40;
+    const gap   = (width - paddingX * 2) / 6;
+    const points = store.dailyPercents.map((pct, i) => ({
+        x: paddingX + i * gap,
+        y: height - 15 - pct * 0.5
+    }));
 
-    const p = points; let pathDataCurve = 'M ' + p[0].x + ',' + p[0].y; let pathDataPoly = 'M 0,' + height + ' L ' + p[0].x + ',' + p[0].y;
+    // Build bezier path strings
+    const p = points;
+    let pathDataCurve = `M ${p[0].x},${p[0].y}`;
+    let pathDataPoly  = `M 0,${height} L ${p[0].x},${p[0].y}`;
     for (let i = 1; i < p.length; i++) {
-        const k = 0.15;
-        let v1 = {x: p[1].x - p[0].x, y: p[1].y - p[0].y};
-        if (i > 1) v1 = {x: p[i].x - p[i-2].x, y: p[i].y - p[i-2].y};
-        let c1 = {x: p[i-1].x + v1.x * k, y: p[i-1].y + v1.y * k};
-        let v2 = {x: p[i].x - p[i-1].x, y: p[i].x - p[i-1].x};
-        if (i < p.length - 1) v2 = {x: p[i+1].x - p[i-1].x, y: p[i+1].y - p[i-1].y};
-        let c2 = {x: p[i].x - v2.x * k, y: p[i].y - v2.y * k};
-
-        pathDataCurve += ` C ${c1.x},${c1.y} ${c2.x},${c2.y} ${p[i].x},${p[i].y}`;
-        pathDataPoly += ` C ${c1.x},${c1.y} ${c2.x},${c2.y} ${p[i].x},${p[i].y}`;
+        const k  = 0.15;
+        let v1   = i > 1 ? { x: p[i].x - p[i-2].x, y: p[i].y - p[i-2].y } : { x: p[1].x - p[0].x, y: p[1].y - p[0].y };
+        let v2   = i < p.length - 1 ? { x: p[i+1].x - p[i-1].x, y: p[i+1].y - p[i-1].y } : { x: p[i].x - p[i-1].x, y: p[i].x - p[i-1].x };
+        const c1 = { x: p[i-1].x + v1.x * k, y: p[i-1].y + v1.y * k };
+        const c2 = { x: p[i].x   - v2.x * k, y: p[i].y   - v2.y * k };
+        const seg = ` C ${c1.x},${c1.y} ${c2.x},${c2.y} ${p[i].x},${p[i].y}`;
+        pathDataCurve += seg; pathDataPoly += seg;
     }
-    pathDataPoly += ' L ' + width + ',' + height + ' Z';
+    pathDataPoly += ` L ${width},${height} Z`;
+
     document.getElementById('wave-path').setAttribute('d', pathDataCurve);
     document.getElementById('wave-polygon').setAttribute('d', pathDataPoly);
-    document.getElementById('wave-points').innerHTML = pointElements;
+
+    // Rebuild wave points using createElementNS
+    const wavePoints = document.getElementById('wave-points');
+    wavePoints.innerHTML = '';
+    points.forEach((pt, i) => {
+        const circle = svgEl('circle', { cx: pt.x, cy: pt.y, r: '4.5' });
+        circle.addEventListener('mousemove', e => showTooltip(e, i));
+        circle.addEventListener('mouseleave', hideTooltip);
+        wavePoints.appendChild(circle);
+    });
 }
 
-function saveData() {
-    // Bug 1 fix: sync _state from DOM first (fast, < 1ms), then read from _state.
-    // This ensures correctness when saveData() is called directly (e.g., on navigation).
-    // The main performance gain is debouncing via scheduleSave() — 400ms groups rapid changes.
-    _syncStateFromDOM();
-    const wData = {
-        tasks:  Object.assign({}, _state.tasks),
-        habits: Object.assign({}, _state.habits),
-        notes:  Object.assign({}, _state.notes)
-    };
-    appData.weeks[viewingWeekId] = wData;
-    saveGlobalData();
+function drawBarChart(container, dailyTaskPcts, weekBlocks) {
+    container.innerHTML = '';
+    const svg = svgEl('svg', { viewBox: '0 -10 750 180', style: 'width:100%;height:100%;overflow:visible;' });
+
+    // Grid lines
+    [[10, '100%'], [80, '50%'], [150, '0%']].forEach(([y, label]) => {
+        const isBaseline = y === 150;
+        svg.appendChild(svgEl('line', { x1: 40, y1: y, x2: 740, y2: y,
+            stroke: isBaseline ? 'rgba(139,94,60,0.5)' : 'rgba(139,94,60,0.2)',
+            'stroke-dasharray': isBaseline ? '' : '4', 'stroke-width': '1' }));
+        const t = svgEl('text', { x: 30, y: y + 4, 'text-anchor': 'end', 'font-size': '10',
+            fill: 'var(--border-darker)', 'font-weight': '600' });
+        t.textContent = label; svg.appendChild(t);
+    });
+
+    if (dailyTaskPcts.length > 0) {
+        const chartWidth = 700; const startX = 40;
+        const barWidth   = (chartWidth / dailyTaskPcts.length) - 4;
+        dailyTaskPcts.forEach((pct, idx) => {
+            const bh = (pct / 100) * 140;
+            svg.appendChild(svgEl('rect', {
+                x: startX + idx * (chartWidth / dailyTaskPcts.length) + 2,
+                y: 150 - bh, width: barWidth, height: bh,
+                fill: 'var(--border-color)', rx: '2'
+            }));
+        });
+        const weekWidth = chartWidth / 5;
+        weekBlocks.forEach((block, w) => {
+            const t = svgEl('text', { x: startX + w * weekWidth + weekWidth / 2, y: 170,
+                'text-anchor': 'middle', 'font-size': '9', fill: 'var(--border-darker)', 'font-weight': '700' });
+            t.textContent = block.label; svg.appendChild(t);
+            if (w > 0) {
+                svg.appendChild(svgEl('line', { x1: startX + w * weekWidth, y1: 10,
+                    x2: startX + w * weekWidth, y2: 155, stroke: 'rgba(139,94,60,0.2)', 'stroke-width': '1' }));
+            }
+        });
+    }
+    container.appendChild(svg);
 }
 
-function loadWeekData() {
-    const wData = appData.weeks[viewingWeekId] || {tasks:{}, habits:{}, notes:{}};
-    for(let d = 0; d < 7; d++) {
-        for(let t = 0; t < tasksPerDay; t++) {
-            document.getElementById(`t_name_${d}_${t}`).value = wData.tasks[`t_name_${d}_${t}`] || "";
-            document.getElementById(`t_h_start_${d}_${t}`).value = wData.tasks[`t_h_start_${d}_${t}`] || "";
-            document.getElementById(`t_m_start_${d}_${t}`).value = wData.tasks[`t_m_start_${d}_${t}`] || "";
-            document.getElementById(`t_h_end_${d}_${t}`).value = wData.tasks[`t_h_end_${d}_${t}`] || "";
-            document.getElementById(`t_m_end_${d}_${t}`).value = wData.tasks[`t_m_end_${d}_${t}`] || "";
-            document.getElementById(`t_check_${d}_${t}`).checked = wData.tasks[`t_check_${d}_${t}`] || false;
-            document.getElementById(`task_div_${d}_${t}`).setAttribute('data-priority', wData.tasks[`t_pri_${d}_${t}`] || "3");
-            document.getElementById(`task_div_${d}_${t}`).setAttribute('data-delay', wData.tasks[`t_delay_${d}_${t}`] || "0");
-        }
-        sortTasks(d);
+function drawPieChart(container, habitStats) {
+    container.innerHTML = '';
+    const svg = svgEl('svg', { viewBox: '-110 -110 220 220', style: 'width:100%;height:100%;overflow:visible;' });
+    const totalDones = habitStats.reduce((s, h) => s + h.count, 0);
+    if (totalDones === 0) {
+        const t = svgEl('text', { x: 0, y: 0, 'text-anchor': 'middle', fill: '#888', 'font-size': '12' });
+        t.textContent = 'No Data'; svg.appendChild(t);
+    } else {
+        const colors = ['#E6C655', '#90B496', '#86A8BC', '#E3A77A', '#FA8C28'];
+        let startAngle = 0;
+        habitStats.forEach((h, i) => {
+            const pct      = h.count / totalDones;
+            const angle    = pct * 2 * Math.PI;
+            const endAngle = startAngle + angle;
+            const x1 = Math.cos(startAngle) * 60; const y1 = Math.sin(startAngle) * 60;
+            const x2 = Math.cos(endAngle)   * 60; const y2 = Math.sin(endAngle)   * 60;
+            const largeArc = pct > 0.5 ? 1 : 0;
+            const d = pct === 1
+                ? 'M 60 0 A 60 60 0 1 1 -60 0 A 60 60 0 1 1 60 0'
+                : `M 0 0 L ${x1} ${y1} A 60 60 0 ${largeArc} 1 ${x2} ${y2} Z`;
+            svg.appendChild(svgEl('path', { d, fill: colors[i % colors.length], stroke: '#fff', 'stroke-width': '1' }));
+
+            const mid = startAngle + angle / 2;
+            const lx1 = Math.cos(mid) * 60; const ly1 = Math.sin(mid) * 60;
+            const lx2 = Math.cos(mid) * 75; const ly2 = Math.sin(mid) * 75;
+            const tx  = Math.cos(mid) * 80; const ty  = Math.sin(mid) * 80;
+            svg.appendChild(svgEl('polyline', { points: `${lx1},${ly1} ${lx2},${ly2}`,
+                fill: 'none', stroke: colors[i % colors.length], 'stroke-width': '1.5' }));
+            const label = svgEl('text', { x: tx, y: ty,
+                'text-anchor': Math.cos(mid) > 0 ? 'start' : 'end',
+                'alignment-baseline': 'middle', 'font-size': '10', 'font-weight': '700', fill: 'var(--text-main)' });
+            label.textContent = `${h.name} (${Math.round(pct * 100)}%)`;
+            svg.appendChild(label);
+            startAngle = endAngle;
+        });
     }
-    for(let h = 0; h < habitsCount; h++) {
-        const hName = document.getElementById(`h_name_${h}`);
-        hName.value = wData.habits[`h_name_${h}`] || "";
-        autoResizeTextarea(hName);
-        for(let d = 0; d < 7; d++) { document.getElementById(`h_check_${h}_${d}`).checked = wData.habits[`h_check_${h}_${d}`] || false; }
-    }
-    for(let i=1; i<=10; i++) {
-        const el = document.getElementById(`note_input_${i}`);
-        if(el) el.value = wData.notes?.[`note_${i}`] || "";
-    }
-    // Bug 1 fix: populate _state from DOM after loading so saveData() reads correct values
-    _syncStateFromDOM();
+    container.appendChild(svg);
 }
 
-function openNoteModal() { activeModalCount++; document.getElementById('note-modal').style.display = 'flex'; }
-function closeNoteModal() { activeModalCount = Math.max(0, activeModalCount - 1); document.getElementById('note-modal').style.display = 'none'; }
 
-function openAbbrModal() { activeModalCount++; document.getElementById('abbr-modal').style.display = 'flex'; }
-function closeAbbrModal() { activeModalCount = Math.max(0, activeModalCount - 1); document.getElementById('abbr-modal').style.display = 'none'; }
+// ============================================================
+// 13. MODAL LOGIC
+// ============================================================
+function openNoteModal()    { store.openModal(); document.getElementById('note-modal').style.display = 'flex'; }
+function closeNoteModal()   { store.closeModal(); document.getElementById('note-modal').style.display = 'none'; }
+function openAbbrModal()    { store.openModal(); document.getElementById('abbr-modal').style.display = 'flex'; }
+function closeAbbrModal()   { store.closeModal(); document.getElementById('abbr-modal').style.display = 'none'; }
 
 function openMonthlyModal() {
-    activeModalCount++;
-    // Đồng bộ viewingMonthId với tháng của tuần đang xem
-    const parts = viewingWeekId.split('-');
+    store.openModal();
+    const parts = store.viewingWeekId.split('-');
     const vDate = new Date(parts[0], parts[1] - 1, parts[2]);
-    viewingMonthId = `${vDate.getFullYear()}-${String(vDate.getMonth() + 1).padStart(2, '0')}`;
+    store.viewingMonthId = `${vDate.getFullYear()}-${String(vDate.getMonth() + 1).padStart(2, '0')}`;
     document.getElementById('monthly-modal').style.display = 'flex';
     loadMonthlyData();
 }
 function closeMonthlyModal() {
-    activeModalCount = Math.max(0, activeModalCount - 1);
+    store.closeModal();
     document.getElementById('monthly-modal').style.display = 'none';
     document.getElementById('monthly-bar-chart').innerHTML = '';
     document.getElementById('monthly-pie-chart').innerHTML = '';
 }
 
-/**
- * Trả về 5 tuần gần nhất, mỗi phần tử là { wId: string|null, label: string }.
- * Label format: "D/M – D/M" dựa trên ngày thực tế của tuần đó.
- */
-function getMonthWeeks() {
-    const [y, m] = viewingMonthId.split('-').map(Number);
-    const firstOfMonth = new Date(y, m - 1, 1);
-    const fmt = d => `${d.getDate()}/${d.getMonth() + 1}`;
-    const blocks = [];
-    let monday = getMonday(firstOfMonth);
-    for (let i = 0; i < 5; i++) {
-        const sunday = new Date(monday);
-        sunday.setDate(monday.getDate() + 6);
-        const wId = formatDateKey(monday);
-        const label = `${fmt(monday)}–${fmt(sunday)}`;
-        blocks.push({ wId: appData.weeks[wId] ? wId : null, label, mondayDate: new Date(monday) });
-        monday = new Date(monday);
-        monday.setDate(monday.getDate() + 7);
-    }
-    return blocks;
-}
-
 function loadMonthlyData() {
-    document.getElementById('monthly-bar-chart').innerHTML = '';
-    document.getElementById('monthly-pie-chart').innerHTML = '';
-    document.getElementById('modal-weekly-cols').innerHTML = '';
-    const mData = appData.monthly || {};
-    for(let i=1; i<=3; i++) {
-        document.getElementById(`mg-${i}`).value = mData[`mg_${i}`] || "";
-        document.getElementById(`gr-name-${i}`).value = mData[`gr_name_${i}`] || "";
-        document.getElementById(`gr-target-${i}`).value = mData[`gr_target_${i}`] || "";
-        document.getElementById(`gr-actual-${i}`).value = mData[`gr_actual_${i}`] || "";
-        document.getElementById(`gr-status-${i}`).value = mData[`gr_status_${i}`] || "Pending";
+    document.getElementById('monthly-bar-chart').innerHTML  = '';
+    document.getElementById('monthly-pie-chart').innerHTML  = '';
+    document.getElementById('modal-weekly-cols').innerHTML  = '';
+    const mData = store.appData.monthly || {};
+    for (let i = 1; i <= 3; i++) {
+        document.getElementById(`mg-${i}`).value        = mData[`mg_${i}`]       || '';
+        document.getElementById(`gr-name-${i}`).value   = mData[`gr_name_${i}`]  || '';
+        document.getElementById(`gr-target-${i}`).value = mData[`gr_target_${i}`]|| '';
+        document.getElementById(`gr-actual-${i}`).value = mData[`gr_actual_${i}`]|| '';
+        document.getElementById(`gr-status-${i}`).value = mData[`gr_status_${i}`]|| 'Pending';
         updateRowStatus(i);
     }
 
-    const weekBlocks = getMonthWeeks();
+    const weekBlocks    = getMonthWeeks();
     const colsContainer = document.getElementById('modal-weekly-cols');
     colsContainer.style.gridTemplateColumns = 'repeat(5, 1fr)';
-    const colsFragment = document.createDocumentFragment();
+    const colsFragment  = document.createDocumentFragment();
+    const dailyTaskPcts = [];
 
-    let dailyTaskPcts = [];
-
-    weekBlocks.forEach((block, i) => {
-        const wId = block.wId;
+    weekBlocks.forEach(block => {
+        const wId       = block.wId;
         const wIdForNav = formatDateKey(block.mondayDate);
-        let taskPct = 0, habPct = 0;
+        let taskPct = 0; let habPct = 0;
         try {
-            if (wId && appData.weeks[wId]) {
-                const wd = appData.weeks[wId];
-                let tDoneTotal = 0, tTotalCount = 0, hDone = 0, hTotal = 0;
+            if (wId && store.appData.weeks[wId]) {
+                const wd = store.appData.weeks[wId];
+                let tDone = 0; let tTotal = 0; let hDone = 0; let hTotal = 0;
                 for (let d = 0; d < 7; d++) {
-                    let dayDone = 0, dayTotal = 0;
+                    let dayDone = 0; let dayTotal = 0;
                     for (let t = 0; t < 10; t++) {
                         if (wd.tasks[`t_name_${d}_${t}`]) {
-                            dayTotal++; tTotalCount++;
-                            if (wd.tasks[`t_check_${d}_${t}`]) { dayDone++; tDoneTotal++; }
+                            dayTotal++; tTotal++;
+                            if (wd.tasks[`t_check_${d}_${t}`]) { dayDone++; tDone++; }
                         }
                     }
                     dailyTaskPcts.push(dayTotal > 0 ? (dayDone / dayTotal) * 100 : 0);
                 }
-                if (tTotalCount > 0) taskPct = Math.round((tDoneTotal / tTotalCount) * 100);
+                if (tTotal > 0) taskPct = Math.round((tDone / tTotal) * 100);
                 for (let h = 0; h < 5; h++) {
                     if (wd.habits[`h_name_${h}`]) {
                         for (let d = 0; d < 7; d++) { hTotal++; if (wd.habits[`h_check_${h}_${d}`]) hDone++; }
                     }
                 }
                 if (hTotal > 0) habPct = Math.round((hDone / hTotal) * 100);
-            } else {
-                for (let d = 0; d < 7; d++) dailyTaskPcts.push(0);
-            }
-        } catch(e) {
-            for (let d = 0; d < 7; d++) dailyTaskPcts.push(0);
-        }
+            } else { for (let d = 0; d < 7; d++) dailyTaskPcts.push(0); }
+        } catch (err) { for (let d = 0; d < 7; d++) dailyTaskPcts.push(0); }
 
-        const card = document.createElement('div');
-        card.className = 'week-card';
-
-        const h4 = document.createElement('h4');
-        h4.style.cssText = 'font-size:11px; margin:0 0 10px; text-transform:none;';
-        h4.textContent = block.label;
-
-        const stats = document.createElement('div');
-        stats.className = 'week-card-stats';
+        const card  = document.createElement('div'); card.className = 'week-card';
+        const h4    = document.createElement('h4');
+        h4.style.cssText = 'font-size:11px;margin:0 0 10px;text-transform:none;'; h4.textContent = block.label;
+        const stats = document.createElement('div'); stats.className = 'week-card-stats';
         stats.innerHTML = `<div><div class="week-card__pct">${taskPct}%</div><div class="week-card__label">Tasks</div></div>` +
-                          `<div><div style="font-size:14px; font-weight:800; color:var(--border-darker);">${habPct}%</div><div class="week-card__label">Habits</div></div>`;
-
-        const btn = document.createElement('button');
-        btn.className = 'nav-btn detail-btn';
-        btn.onclick = () => switchToWeek(wIdForNav);
-        btn.textContent = 'Detail';
-
-        card.appendChild(h4);
-        card.appendChild(stats);
-        card.appendChild(btn);
+                          `<div><div style="font-size:14px;font-weight:800;color:var(--border-darker);">${habPct}%</div><div class="week-card__label">Habits</div></div>`;
+        const btn = document.createElement('button'); btn.className = 'nav-btn detail-btn';
+        btn.onclick = () => switchToWeek(wIdForNav); btn.textContent = 'Detail';
+        card.appendChild(h4); card.appendChild(stats); card.appendChild(btn);
         colsFragment.appendChild(card);
     });
     colsContainer.appendChild(colsFragment);
 
-    let barHtml = `<svg viewBox="0 -10 750 180" style="width:100%; height:100%; overflow:visible;">`;
-    barHtml += `<line x1="40" y1="10" x2="740" y2="10" stroke="rgba(139, 94, 60, 0.2)" stroke-dasharray="4" stroke-width="1"></line>`;
-    barHtml += `<line x1="40" y1="80" x2="740" y2="80" stroke="rgba(139, 94, 60, 0.2)" stroke-dasharray="4" stroke-width="1"></line>`;
-    barHtml += `<line x1="40" y1="150" x2="740" y2="150" stroke="rgba(139, 94, 60, 0.5)" stroke-width="1"></line>`;
-    barHtml += `<text x="30" y="14" text-anchor="end" font-size="10" fill="var(--border-darker)" font-weight="600">100%</text>`;
-    barHtml += `<text x="30" y="84" text-anchor="end" font-size="10" fill="var(--border-darker)" font-weight="600">50%</text>`;
-    barHtml += `<text x="30" y="154" text-anchor="end" font-size="10" fill="var(--border-darker)" font-weight="600">0%</text>`;
+    drawBarChart(document.getElementById('monthly-bar-chart'), dailyTaskPcts, weekBlocks);
 
-    if (dailyTaskPcts.length > 0) {
-        const chartWidth = 700, startX = 40;
-        const barWidth = (chartWidth / dailyTaskPcts.length) - 4;
-        dailyTaskPcts.forEach((pct, idx) => {
-            const bh = (pct / 100) * 140;
-            const bx = startX + idx * (chartWidth / dailyTaskPcts.length) + 2;
-            const by = 150 - bh;
-            barHtml += `<rect x="${bx}" y="${by}" width="${barWidth}" height="${bh}" fill="var(--border-color)" rx="2"></rect>`;
-        });
-        const weekWidth = chartWidth / 5;
-        weekBlocks.forEach((block, w) => {
-            const wx = startX + (w * weekWidth) + (weekWidth / 2);
-            barHtml += `<text x="${wx}" y="170" text-anchor="middle" font-size="9" fill="var(--border-darker)" font-weight="700">${block.label}</text>`;
-            if (w > 0) {
-                const divX = startX + (w * weekWidth);
-                barHtml += `<line x1="${divX}" y1="10" x2="${divX}" y2="155" stroke="rgba(139, 94, 60, 0.2)" stroke-width="1"></line>`;
-            }
-        });
-    }
-    barHtml += `</svg>`;
-    document.getElementById('monthly-bar-chart').innerHTML = barHtml;
-
-    let habitStats = [];
+    // Build habit stats for pie
+    const habitStats = [];
     for (let h = 0; h < 5; h++) {
-        let totalDones = 0, hName = "";
+        let totalDones = 0; let hName = '';
         weekBlocks.forEach(block => {
             const wId = block.wId;
-            if (wId && appData.weeks[wId] && appData.weeks[wId].habits[`h_name_${h}`]) {
-                hName = appData.weeks[wId].habits[`h_name_${h}`];
+            if (wId && store.appData.weeks[wId] && store.appData.weeks[wId].habits[`h_name_${h}`]) {
+                hName = store.appData.weeks[wId].habits[`h_name_${h}`];
                 for (let d = 0; d < 7; d++) {
-                    if (appData.weeks[wId].habits[`h_check_${h}_${d}`]) totalDones++;
+                    if (store.appData.weeks[wId].habits[`h_check_${h}_${d}`]) totalDones++;
                 }
             }
         });
         if (hName && totalDones > 0) habitStats.push({ name: hName, count: totalDones });
     }
-
-    const totalHabitDones = habitStats.reduce((sum, h) => sum + h.count, 0);
-    let pieHtml = `<svg viewBox="-110 -110 220 220" style="width:100%; height:100%; overflow:visible;">`;
-    if (totalHabitDones === 0) {
-        pieHtml += `<text x="0" y="0" text-anchor="middle" fill="#888" font-size="12">No Data</text>`;
-    } else {
-        let startAngle = 0;
-        const colors = ['#E6C655', '#90B496', '#86A8BC', '#E3A77A', '#FA8C28'];
-        habitStats.forEach((h, i) => {
-            const pct = h.count / totalHabitDones;
-            const angle = pct * 2 * Math.PI;
-            const endAngle = startAngle + angle;
-            const x1 = Math.cos(startAngle) * 60; const y1 = Math.sin(startAngle) * 60;
-            const x2 = Math.cos(endAngle) * 60; const y2 = Math.sin(endAngle) * 60;
-            const largeArc = pct > 0.5 ? 1 : 0;
-            let pathData = `M 0 0 L ${x1} ${y1} A 60 60 0 ${largeArc} 1 ${x2} ${y2} Z`;
-            if (pct === 1) pathData = `M 60 0 A 60 60 0 1 1 -60 0 A 60 60 0 1 1 60 0`;
-            pieHtml += `<path d="${pathData}" fill="${colors[i % colors.length]}" stroke="#fff" stroke-width="1"></path>`;
-            const midAngle = startAngle + angle / 2;
-            const lx1 = Math.cos(midAngle) * 60; const ly1 = Math.sin(midAngle) * 60;
-            const lx2 = Math.cos(midAngle) * 75; const ly2 = Math.sin(midAngle) * 75;
-            const tx = Math.cos(midAngle) * 80; const ty = Math.sin(midAngle) * 80;
-            const anchor = Math.cos(midAngle) > 0 ? "start" : "end";
-            pieHtml += `<polyline points="${lx1},${ly1} ${lx2},${ly2}" fill="none" stroke="${colors[i % colors.length]}" stroke-width="1.5"></polyline>`;
-            pieHtml += `<text x="${tx}" y="${ty}" text-anchor="${anchor}" alignment-baseline="middle" font-size="10" font-weight="700" fill="var(--text-main)">${h.name} (${Math.round(pct*100)}%)</text>`;
-            startAngle = endAngle;
-        });
-    }
-    pieHtml += `</svg>`;
-    document.getElementById('monthly-pie-chart').innerHTML = pieHtml;
-}
-function saveMonthly() {
-    appData.monthly = appData.monthly || {};
-    for(let i=1; i<=3; i++) {
-        appData.monthly[`mg_${i}`] = document.getElementById(`mg-${i}`).value;
-        appData.monthly[`gr_name_${i}`] = document.getElementById(`gr-name-${i}`).value;
-        appData.monthly[`gr_target_${i}`] = document.getElementById(`gr-target-${i}`).value;
-        appData.monthly[`gr_actual_${i}`] = document.getElementById(`gr-actual-${i}`).value;
-        appData.monthly[`gr_status_${i}`] = document.getElementById(`gr-status-${i}`).value;
-    }
-    saveGlobalData();
+    drawPieChart(document.getElementById('monthly-pie-chart'), habitStats);
 }
 
-function updateRowStatus(id) {
-    const row = document.getElementById(`gr-row-${id}`);
-    const select = document.getElementById(`gr-status-${id}`);
-    row.classList.remove('status-achieved', 'status-pending');
-    if(select.value === 'Achieved') row.classList.add('status-achieved');
-    else if (select.value === 'Pending') row.classList.add('status-pending');
-}
-
+// ============================================================
+// 14. WEEK / MONTH NAVIGATION
+// ============================================================
 function switchToWeek(targetWeekId) {
     _syncStateFromDOM(); saveData();
-    const _p = targetWeekId.split('-');
-    viewingMonthId = `${_p[0]}-${_p[1]}`;
-    viewingWeekId = targetWeekId;
-    isViewingNextWeek = false;
-
+    const p = targetWeekId.split('-');
+    store.viewingMonthId    = `${p[0]}-${p[1]}`;
+    store.viewingWeekId     = targetWeekId;
+    store.isViewingNextWeek = false;
     const title = document.getElementById('board-title');
-    if (targetWeekId === currentRealWeekId) {
-        title.innerText = "CURRENT WEEK";
+    if (targetWeekId === store.currentRealWeekId) {
+        title.innerText = 'CURRENT WEEK';
     } else {
-        // Hiển thị tháng/năm của tuần được chọn
-        const p = targetWeekId.split('-');
         const d = new Date(p[0], p[1] - 1, p[2]);
         const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
         title.innerText = `${monthNames[d.getMonth()].toUpperCase()} ${d.getFullYear()}`;
     }
-
-    if (!appData.weeks[viewingWeekId]) {
-        appData.weeks[viewingWeekId] = { tasks: {}, habits: {}, notes: {} };
+    if (!store.appData.weeks[store.viewingWeekId]) {
+        store.appData.weeks[store.viewingWeekId] = { tasks: {}, habits: {}, notes: {} };
     }
-
     closeMonthlyModal();
-    generateWeekDates(viewingWeekId);
+    generateWeekDates(store.viewingWeekId);
     rebuildUI();
 }
 
-// --- Month Picker Modal ---
-
 function openMonthPickerModal() {
-    activeModalCount++;
-    const _vp = viewingWeekId.split('-'); viewingMonthId = _vp[0] + '-' + _vp[1];
+    store.openModal();
+    const vp = store.viewingWeekId.split('-');
+    store.viewingMonthId = `${vp[0]}-${vp[1]}`;
     renderMonthPickerGrid();
     document.getElementById('month-picker-modal').style.display = 'flex';
 }
 function closeMonthPickerModal() {
-    activeModalCount = Math.max(0, activeModalCount - 1);
+    store.closeModal();
     document.getElementById('month-picker-modal').style.display = 'none';
 }
 
 function renderMonthPickerGrid() {
-    var now = new Date();
-    var currentYear = now.getFullYear();
-    var currentMonthIdx = now.getMonth();
-    var monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    var activeMonthIdx = parseInt(viewingMonthId.split('-')[1]) - 1;
-    var activeYear = parseInt(viewingMonthId.split('-')[0]);
-    var html = "";
-    for (var mIdx = 0; mIdx < 12; mIdx++) {
-        var isPast = (currentYear === activeYear && mIdx < currentMonthIdx) || (activeYear < currentYear);
-        var isCurrent = (mIdx === currentMonthIdx);
-        var isActive = (mIdx === activeMonthIdx && currentYear === activeYear);
-        var hasData = Object.keys(appData.weeks).some(function(wId) {
-            var p = wId.split('-');
+    const now           = new Date();
+    const currentYear   = now.getFullYear();
+    const currentMonthIdx = now.getMonth();
+    const monthNames    = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const activeMonthIdx = parseInt(store.viewingMonthId.split('-')[1]) - 1;
+    const activeYear    = parseInt(store.viewingMonthId.split('-')[0]);
+    const grid          = document.getElementById('month-picker-grid');
+    grid.innerHTML      = '';
+    const fragment      = document.createDocumentFragment();
+    for (let mIdx = 0; mIdx < 12; mIdx++) {
+        const isPast   = (currentYear === activeYear && mIdx < currentMonthIdx) || (activeYear < currentYear);
+        const isCurrent = mIdx === currentMonthIdx;
+        const isActive  = mIdx === activeMonthIdx && currentYear === activeYear;
+        const hasData   = Object.keys(store.appData.weeks).some(wId => {
+            const p = wId.split('-');
             return parseInt(p[0]) === currentYear && parseInt(p[1]) - 1 === mIdx;
         });
-        var cls = 'month-picker__cell';
+        let cls = 'month-picker__cell';
         if (isPast) cls += ' month-picker__cell--past';
         else if (isActive) cls += ' month-picker__cell--active';
         else if (isCurrent) cls += ' month-picker__cell--current';
         if (hasData && !isPast) cls += ' month-picker__cell--has-data';
-        var mId = currentYear + '-' + String(mIdx + 1).padStart(2, '0');
-        html += '<div class="' + cls + '" data-month-id="' + mId + '">' + monthNames[mIdx] + '<br><span style="font-size:10px;font-weight:600;opacity:0.7;">' + currentYear + '</span></div>';
+        const mId  = `${currentYear}-${String(mIdx + 1).padStart(2, '0')}`;
+        const cell = document.createElement('div');
+        cell.className = cls; cell.dataset.monthId = mId;
+        cell.innerHTML = `${monthNames[mIdx]}<br><span style="font-size:10px;font-weight:600;opacity:0.7;">${currentYear}</span>`;
+        fragment.appendChild(cell);
     }
-    var grid = document.getElementById('month-picker-grid');
-    grid.innerHTML = html;
-    grid.onclick = function(e) {
-        var cell = e.target.closest('.month-picker__cell');
+    grid.appendChild(fragment);
+    grid.onclick = e => {
+        const cell = e.target.closest('.month-picker__cell');
         if (!cell || cell.classList.contains('month-picker__cell--past')) return;
         switchToMonth(cell.dataset.monthId);
     };
@@ -1242,140 +1211,127 @@ function renderMonthPickerGrid() {
 function switchToMonth(monthId) {
     const parts = monthId.split('-').map(Number);
     const y = parts[0]; const m = parts[1];
-    const firstOfMonth = new Date(y, m - 1, 1);
-    const mondayOfFirstWeek = getMonday(firstOfMonth);
-    const targetWeekId = formatDateKey(mondayOfFirstWeek);
-    if (!appData.weeks[targetWeekId]) {
-        appData.weeks[targetWeekId] = { tasks: {}, habits: {}, notes: {} };
+    const firstOfMonth    = new Date(y, m - 1, 1);
+    const mondayOfFirst   = getMonday(firstOfMonth);
+    const targetWeekId    = formatDateKey(mondayOfFirst);
+    if (!store.appData.weeks[targetWeekId]) {
+        store.appData.weeks[targetWeekId] = { tasks: {}, habits: {}, notes: {} };
     }
-    viewingMonthId = monthId;
+    store.viewingMonthId = monthId;
     const now = new Date();
     const isCurrentMonth = (y === now.getFullYear() && m - 1 === now.getMonth());
-    const title = document.getElementById('board-title');
     const shortMonths = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const title = document.getElementById('board-title');
     if (isCurrentMonth) {
-        viewingWeekId = currentRealWeekId;
-        isViewingNextWeek = false;
-        title.innerText = "CURRENT WEEK";
+        store.viewingWeekId = store.currentRealWeekId; store.isViewingNextWeek = false;
+        title.innerText = 'CURRENT WEEK';
     } else {
-        viewingWeekId = targetWeekId;
-        isViewingNextWeek = false;
-        title.innerText = shortMonths[m - 1].toUpperCase() + ' ' + y;
+        store.viewingWeekId = targetWeekId; store.isViewingNextWeek = false;
+        title.innerText = `${shortMonths[m - 1].toUpperCase()} ${y}`;
     }
     closeMonthPickerModal();
-    generateWeekDates(viewingWeekId);
+    generateWeekDates(store.viewingWeekId);
     rebuildUI();
 }
 
-// ============================================================
-// EVENT DELEGATION (Tasks 4-6)
-// ============================================================
 
+// ============================================================
+// 15. TOOLTIP (throttled mousemove)
+// ============================================================
+let _tooltipThrottle = null;
+document.addEventListener('mousemove', e => {
+    const tooltip = document.getElementById('abbr-tooltip');
+    if (!e.target || !e.target.classList.contains('t-name')) {
+        if (tooltip) tooltip.style.display = 'none';
+        return;
+    }
+    if (_tooltipThrottle) return;
+    _tooltipThrottle = requestAnimationFrame(() => {
+        _tooltipThrottle = null;
+        const target = e.target;
+        if (!target || !target.classList.contains('t-name')) { tooltip.style.display = 'none'; return; }
+        const text = target.value;
+        if (!text) { tooltip.style.display = 'none'; return; }
+        const foundAbbrs = [];
+        for (let i = 1; i <= 10; i++) {
+            const k = store.appData.abbrs?.[`abbr_k_${i}`];
+            const v = store.appData.abbrs?.[`abbr_v_${i}`];
+            if (k && v && new RegExp(`\\b${k}\\b`, 'i').test(text)) {
+                foundAbbrs.push(`<b>${k}</b>: ${v}`);
+            }
+        }
+        if (foundAbbrs.length > 0) {
+            tooltip.innerHTML = foundAbbrs.join('<br>');
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.pageX / 1.1) + 'px';
+            tooltip.style.top  = ((e.pageY / 1.1) + 20) + 'px';
+        } else { tooltip.style.display = 'none'; }
+    });
+});
+
+// ============================================================
+// 16. EVENT DELEGATION
+// ============================================================
 function initEventDelegation() {
-    // document-level
-    document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('click',       handleDocumentClick);
     document.addEventListener('contextmenu', handleDocumentContextMenu);
-
-    // auth overlay
     document.getElementById('auth-overlay').addEventListener('click', handleAuthClick);
-
-    // top-nav
     document.querySelector('.top-nav').addEventListener('click', handleTopNavClick);
-
-    // priority menu
     document.getElementById('priority-menu').addEventListener('click', handlePriorityMenuClick);
-
-    // main grid
-    const mainGrid = document.getElementById('main-grid');
-    mainGrid.addEventListener('change', handleMainGridChange);
-    mainGrid.addEventListener('contextmenu', handleMainGridContextMenu);
-    mainGrid.addEventListener('dragstart', handleMainGridDragStart);
-    mainGrid.addEventListener('dragover', handleMainGridDragOver);
-    mainGrid.addEventListener('drop', handleMainGridDrop);
-
-    // habit container
-    const habitContainer = document.getElementById('habit-container');
-    habitContainer.addEventListener('change', handleHabitChange);
-    habitContainer.addEventListener('input', handleHabitInput);
-
-    // modal close buttons (delegation on body)
     document.body.addEventListener('click', handleModalCloseClick);
-
-    // notes container (inside modal — delegated on document since modal may not exist yet)
     document.addEventListener('change', handleNotesChange);
     document.addEventListener('change', handleAbbrChange);
     document.addEventListener('change', handleMonthlyModalChange);
 
-    // keydown for time navigation (delegated on main-grid)
-    mainGrid.addEventListener('keydown', handleMainGridKeydown);
-}
+    const mainGrid = document.getElementById('main-grid');
+    mainGrid.addEventListener('change',      handleMainGridChange);
+    mainGrid.addEventListener('contextmenu', handleMainGridContextMenu);
+    mainGrid.addEventListener('dragstart',   handleMainGridDragStart);
+    mainGrid.addEventListener('dragover',    handleMainGridDragOver);
+    mainGrid.addEventListener('drop',        handleMainGridDrop);
+    mainGrid.addEventListener('keydown',     handleMainGridKeydown);
 
-// --- Document-level handlers ---
+    const habitContainer = document.getElementById('habit-container');
+    habitContainer.addEventListener('change', handleHabitChange);
+    habitContainer.addEventListener('input',  handleHabitInput);
+}
 
 function handleDocumentClick(e) {
-    // Close priority menu when clicking outside
     const menu = document.getElementById('priority-menu');
-    if (menu && !menu.contains(e.target)) {
-        menu.style.display = 'none';
-    }
-    // Close focus backdrop when clicking it
-    if (e.target && e.target.id === 'focus-backdrop') {
-        closeFocus();
-    }
+    if (menu && !menu.contains(e.target)) menu.style.display = 'none';
+    if (e.target && e.target.id === 'focus-backdrop') closeFocus();
 }
-
 function handleDocumentContextMenu(e) {
-    if (e.target && e.target.id === 'greeting-text') {
-        renameUser(e);
-    }
+    if (e.target && e.target.id === 'greeting-text') renameUser(e);
 }
-
-// --- Auth ---
-
 function handleAuthClick(e) {
-    const btn = e.target.closest('[data-action="login"]');
-    if (btn) handleLogin();
+    if (e.target.closest('[data-action="login"]')) handleLogin();
 }
-
-// --- Top Nav ---
-
 function handleTopNavClick(e) {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
-    const action = btn.dataset.action;
-    if (action === 'open-monthly') openMonthlyModal();
-    else if (action === 'open-month-picker') openMonthPickerModal();
-    else if (action === 'logout') handleLogout();
-    else if (action === 'open-notes') openNoteModal();
-    else if (action === 'open-abbr') openAbbrModal();
+    const a = btn.dataset.action;
+    if (a === 'open-monthly')      openMonthlyModal();
+    else if (a === 'open-month-picker') openMonthPickerModal();
+    else if (a === 'logout')       handleLogout();
+    else if (a === 'open-notes')   openNoteModal();
+    else if (a === 'open-abbr')    openAbbrModal();
 }
-
-// --- Priority Menu ---
-
 function handlePriorityMenuClick(e) {
     const item = e.target.closest('[data-priority]');
     if (!item) return;
-    setPriority(item.dataset.priority === '0' ? 0 :
-                item.dataset.priority === '1' ? 1 :
-                item.dataset.priority === '2' ? 2 :
-                item.dataset.priority === '3' ? 3 :
-                item.dataset.priority);
+    const raw = item.dataset.priority;
+    setPriority(['0','1','2','3'].includes(raw) ? parseInt(raw) : raw);
 }
-
-// --- Modal Close ---
-
 function handleModalCloseClick(e) {
     const btn = e.target.closest('[data-close]');
     if (!btn) return;
-    const modalId = btn.dataset.close;
-    if (modalId === 'note-modal') closeNoteModal();
-    else if (modalId === 'abbr-modal') closeAbbrModal();
-    else if (modalId === 'monthly-modal') closeMonthlyModal();
-    else if (modalId === 'month-picker-modal') closeMonthPickerModal();
+    const id = btn.dataset.close;
+    if (id === 'note-modal')         closeNoteModal();
+    else if (id === 'abbr-modal')    closeAbbrModal();
+    else if (id === 'monthly-modal') closeMonthlyModal();
+    else if (id === 'month-picker-modal') closeMonthPickerModal();
 }
-
-// --- Main Grid ---
-
 function handleMainGridContextMenu(e) {
     const cb = e.target.closest('input[type="checkbox"]');
     if (!cb) return;
@@ -1384,113 +1340,80 @@ function handleMainGridContextMenu(e) {
     const parts = taskItem.id.split('_');
     showContextMenu(e, parseInt(parts[2]), parseInt(parts[3]));
 }
-
 function handleMainGridChange(e) {
     const taskItem = e.target.closest('.task-item');
     if (!taskItem) return;
-    const parts = taskItem.id.split('_'); // task_div_{d}_{t}
-    const d = parseInt(parts[2]);
-    const t = parseInt(parts[3]);
-
+    const parts = taskItem.id.split('_');
+    const d = parseInt(parts[2]); const t = parseInt(parts[3]);
     if (e.target.type === 'checkbox' && e.target.id.startsWith('t_check_')) {
-        _stateSetTask(d, t, 'check', e.target.checked);
-        updateDayAndSave(d);
+        _stateSetTask(d, t, 'check', e.target.checked); updateDayAndSave(d);
     } else if (e.target.classList.contains('t-name')) {
-        _stateSetTask(d, t, 'name', e.target.value);
-        updateDayAndSave(d);
+        _stateSetTask(d, t, 'name', e.target.value); updateDayAndSave(d);
     } else if (e.target.classList.contains('t-time-part')) {
         formatTimeInput(e.target);
-        // Extract field from id: t_h_start_{d}_{t} → h_start
-        const fieldMatch = e.target.id.match(/^t_([a-z_]+)_\d+_\d+$/);
-        if (fieldMatch) {
-            _stateSetTask(d, t, fieldMatch[1], e.target.value);
-            updateDayAndSave(d);
-        }
+        const m = e.target.id.match(/^t_([a-z_]+)_\d+_\d+$/);
+        if (m) { _stateSetTask(d, t, m[1], e.target.value); updateDayAndSave(d); }
     }
 }
-
 function handleMainGridKeydown(e) {
-    const input = e.target;
-    if (!input.classList.contains('t-time-part')) return;
-    const taskItem = input.closest('.task-item');
+    if (!e.target.classList.contains('t-time-part')) return;
+    const taskItem = e.target.closest('.task-item');
     if (!taskItem) return;
     const parts = taskItem.id.split('_');
-    const d = parseInt(parts[2]);
-    const t = parseInt(parts[3]);
+    const d = parseInt(parts[2]); const t = parseInt(parts[3]);
     const types = ['h_start', 'm_start', 'h_end', 'm_end'];
-    const currentIdx = types.findIndex(tp => input.id === `t_${tp}_${d}_${t}`);
-    if (currentIdx === -1) return;
-    handleTimeNavigation(e, d, t, currentIdx);
+    const idx = types.findIndex(tp => e.target.id === `t_${tp}_${d}_${t}`);
+    if (idx !== -1) handleTimeNavigation(e, d, t, idx);
 }
-
 function handleMainGridDragStart(e) {
     const dragZone = e.target.closest('.task-drag-zone');
     if (!dragZone) return;
     const taskItem = dragZone.closest('.task-item');
     if (!taskItem) return;
     const parts = taskItem.id.split('_');
-    const dIdx = parseInt(parts[2]);
-    const tIdx = parseInt(parts[3]);
-    dragStartTask(e, dIdx, tIdx);
+    dragStartTask(e, parseInt(parts[2]), parseInt(parts[3]));
 }
-
-function handleMainGridDragOver(e) {
-    dragOverTask(e);
-}
-
+function handleMainGridDragOver(e) { dragOverTask(e); }
 function handleMainGridDrop(e) {
     const taskItem = e.target.closest('.task-item');
     if (taskItem) {
         const parts = taskItem.id.split('_');
-        dropOnTaskItem(e, parseInt(parts[2]), parseInt(parts[3]));
-        return;
+        dropOnTaskItem(e, parseInt(parts[2]), parseInt(parts[3])); return;
     }
     const taskList = e.target.closest('.task-list');
-    if (taskList) {
-        const dIdx = parseInt(taskList.id.replace('task_list_', ''));
-        dropTask(e, dIdx);
-    }
+    if (taskList) dropTask(e, parseInt(taskList.id.replace('task_list_', '')));
 }
-
-// --- Habit Container ---
-
 function handleHabitChange(e) {
     if (e.target.type === 'checkbox' && e.target.id.startsWith('h_check_')) {
-        _state.habits[e.target.id] = e.target.checked;
-        scheduleSave();
+        store.state.habits[e.target.id] = e.target.checked; scheduler.save();
     } else if (e.target.tagName === 'TEXTAREA' && e.target.id.startsWith('h_name_')) {
-        _state.habits[e.target.id] = e.target.value;
-        scheduleSave();
+        store.state.habits[e.target.id] = e.target.value; scheduler.save();
     }
 }
-
 function handleHabitInput(e) {
     if (e.target.tagName === 'TEXTAREA') {
-        autoResizeTextarea(e.target);
-        _state.habits[e.target.id] = e.target.value;
+        autoResizeTextarea(e.target); store.state.habits[e.target.id] = e.target.value;
     }
 }
-
-// --- Notes / Abbr / Monthly (delegated on document) ---
-
 function handleNotesChange(e) {
     if (!e.target.id || !e.target.id.startsWith('note_input_')) return;
-    const i = e.target.id.replace('note_input_', '');
-    _state.notes[`note_${i}`] = e.target.value;
-    scheduleSave();
+    store.state.notes[`note_${e.target.id.replace('note_input_', '')}`] = e.target.value;
+    scheduler.save();
 }
-
 function handleAbbrChange(e) {
     if (!e.target.id || (!e.target.id.startsWith('abbr_k_') && !e.target.id.startsWith('abbr_v_'))) return;
     saveAbbrData();
 }
-
 function handleMonthlyModalChange(e) {
     const modal = document.getElementById('monthly-modal');
     if (!modal || !modal.contains(e.target)) return;
     if (e.target.id && e.target.id.startsWith('gr-status-')) {
-        const idx = parseInt(e.target.id.replace('gr-status-', ''));
-        updateRowStatus(idx);
+        updateRowStatus(parseInt(e.target.id.replace('gr-status-', '')));
     }
     saveMonthly();
 }
+
+// ============================================================
+// Close IIFE
+// ============================================================
+})();
