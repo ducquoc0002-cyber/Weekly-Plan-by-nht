@@ -18,37 +18,37 @@
     <div id="save-toast">✅ Saved</div>
     <div id="abbr-tooltip"></div>
 
-    <div id="focus-backdrop" onclick="closeFocus()"></div>
+    <div id="focus-backdrop"></div>
 
     <div id="auth-overlay">
         <div class="auth-box">
-            <h2 style="margin-top: 0; color: var(--text-main);">Login</h2>
+            <h2 class="auth-box__title">Login</h2>
             <input type="email" id="auth-email" class="auth-input" placeholder="Your Email">
             <input type="password" id="auth-password" class="auth-input" placeholder="Password">
-            <button class="auth-btn" onclick="handleLogin()">Login</button>
-            <p id="auth-msg" style="color: #D32F2F; font-size: 12px; margin-top: 15px; font-weight: 600; height: 15px;"></p>
+            <button class="auth-btn" data-action="login">Login</button>
+            <p id="auth-msg" class="auth-msg"></p>
         </div>
     </div>
 
     <div class="top-nav">
-        <div style="display: flex; gap: 10px; z-index: 2;">
-            <button class="nav-btn" onclick="openMonthlyModal()">📊 Monthly Summary</button>
-            <button id="nav-btn-monthly-basis" class="nav-btn" onclick="openMonthPickerModal()">📅 Monthly Basis</button>
+        <div class="top-nav__left">
+            <button class="nav-btn" data-action="open-monthly">📊 Monthly Summary</button>
+            <button id="nav-btn-monthly-basis" class="nav-btn" data-action="open-month-picker">📅 Monthly Basis</button>
         </div>
 
-        <div style="position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 20px; z-index: 1;">
+        <div class="top-nav__center">
             <div class="page-main-title" id="board-title">CURRENT WEEK</div>
         </div>
 
-        <button class="nav-btn" onclick="handleLogout()" style="background: rgba(211, 47, 47, 0.1); border-color: #D32F2F; color: #D32F2F; z-index: 2;">🚪 Logout</button>
+        <button class="nav-btn nav-btn--danger" data-action="logout">🚪 Logout</button>
     </div>
 
     <div id="priority-menu" class="context-menu">
-        <div class="context-menu-item" onclick="setPriority(0)"><div class="color-box bg-red"></div> Urgent</div>
-        <div class="context-menu-item" onclick="setPriority('star')">⭐ Starred</div>
-        <div class="context-menu-item" onclick="setPriority(1)"><div class="color-box bg-orange"></div> Important</div>
-        <div class="context-menu-item" onclick="setPriority(2)"><div class="color-box bg-green"></div> Normal</div>
-        <div class="context-menu-item" onclick="setPriority(3)"><div class="color-box bg-clear"></div> Clear Mark</div>
+        <div class="context-menu-item" data-priority="0"><div class="color-box bg-red"></div> Urgent</div>
+        <div class="context-menu-item" data-priority="star">⭐ Starred</div>
+        <div class="context-menu-item" data-priority="1"><div class="color-box bg-orange"></div> Important</div>
+        <div class="context-menu-item" data-priority="2"><div class="color-box bg-green"></div> Normal</div>
+        <div class="context-menu-item" data-priority="3"><div class="color-box bg-clear"></div> Clear Mark</div>
     </div>
 
     <div id="chart-tooltip" class="chart-tooltip"></div>
@@ -69,7 +69,6 @@
                             <div
                                 id="greeting-text"
                                 class="summary-header__greeting greeting-text"
-                                oncontextmenu="renameUser(event)"
                                 title="Right-click to rename"
                             >
                                 Hi Name !!
@@ -110,12 +109,12 @@
                     <div class="calendar-grid" id="cal-grid-days"></div>
                 </div>
 
-                <div class="widget-title" style="font-size: 1.1em; padding: 6px; margin-bottom: 12px;">Habit Tracker</div>
+                <div class="widget-title">Habit Tracker</div>
                 <div class="habit-table" id="habit-container"></div>
                 
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button class="nav-btn" style="flex: 1; padding: 12px; font-size: 13px; text-transform: uppercase;" onclick="openNoteModal()">📝 Notes</button>
-                    <button class="nav-btn" style="flex: 1; padding: 12px; font-size: 13px; text-transform: uppercase;" onclick="openAbbrModal()"><span style="color: #A9B4C2; text-shadow: 1px 1px 2px rgba(255,255,255,0.8); font-size: 1.1em;">☁</span> Abbreviations</button>
+                <div class="widget-btn-row">
+                    <button class="nav-btn nav-btn--full" data-action="open-notes">📝 Notes</button>
+                    <button class="nav-btn nav-btn--full" data-action="open-abbr"><span style="color: #A9B4C2; text-shadow: 1px 1px 2px rgba(255,255,255,0.8); font-size: 1.1em;">☁</span> Abbreviations</button>
                 </div>
             </div>
             
@@ -123,42 +122,42 @@
     </div>
 
     <div id="note-modal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 550px;">
+        <div class="modal-content modal-content--sm">
             <div class="modal-header">
-                <h2 style="margin:0; color:var(--text-main); font-weight:800;">📝 Note</h2>
-                <button class="modal-close" onclick="closeNoteModal()">×</button>
+                <h2>📝 Note</h2>
+                <button class="modal-close" data-close="note-modal">×</button>
             </div>
-            <div id="notes-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            <div id="notes-container"></div>
         </div>
     </div>
 
     <div id="abbr-modal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-content modal-content--xs">
             <div class="modal-header">
-                <h2 style="margin:0; color:var(--text-main); font-weight:800;">☁ Abbreviations</h2>
-                <button class="modal-close" onclick="closeAbbrModal()">×</button>
+                <h2>☁ Abbreviations</h2>
+                <button class="modal-close" data-close="abbr-modal">×</button>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; font-weight: bold; border-bottom: 2px solid rgba(139,94,60,0.4); padding-bottom: 10px; margin-bottom: 10px; font-size: 13px;">
+            <div class="abbr-header">
                 <div>Viết tắt</div>
                 <div>Nghĩa</div>
             </div>
-            <div id="abbr-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            <div id="abbr-container"></div>
         </div>
     </div>
 
     <div id="monthly-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 style="margin:0; color:var(--text-main); font-weight:800;">📊 Monthly Summary</h2>
-                <button class="modal-close" onclick="closeMonthlyModal()">×</button>
+                <h2>📊 Monthly Summary</h2>
+                <button class="modal-close" data-close="monthly-modal">×</button>
             </div>
             
             <div class="monthly-section">
                 <div class="monthly-section-title">Monthly Goals</div>
                 <div class="goals-list">
-                    <div class="goal-item"><b>1.</b> <input type="text" id="mg-1" onchange="saveMonthly()" placeholder="Main Focus..."></div>
-                    <div class="goal-item"><b>2.</b> <input type="text" id="mg-2" onchange="saveMonthly()" placeholder="Secondary Goal..."></div>
-                    <div class="goal-item"><b>3.</b> <input type="text" id="mg-3" onchange="saveMonthly()" placeholder="Health / Personal..."></div>
+                    <div class="goal-item"><b>1.</b> <input type="text" id="mg-1" placeholder="Main Focus..."></div>
+                    <div class="goal-item"><b>2.</b> <input type="text" id="mg-2" placeholder="Secondary Goal..."></div>
+                    <div class="goal-item"><b>3.</b> <input type="text" id="mg-3" placeholder="Health / Personal..."></div>
                 </div>
             </div>
 
@@ -167,15 +166,15 @@
                 <div class="weekly-cols" id="modal-weekly-cols"></div>
             </div>
 
-            <div style="display: flex; gap: 20px; margin-bottom: 25px;">
-                <div class="monthly-section" style="flex: 7; margin-bottom: 0;">
+            <div class="monthly-charts">
+                <div class="monthly-section monthly-charts__tasks">
                     <div class="monthly-section-title">Weekly Performance</div>
-                    <div id="monthly-bar-chart" style="position: relative; height: 180px; width: 100%;"></div>
+                    <div id="monthly-bar-chart" class="monthly-chart-area"></div>
                 </div>
                 
-                <div class="monthly-section" style="flex: 3; margin-bottom: 0;">
+                <div class="monthly-section monthly-charts__habits">
                     <div class="monthly-section-title">Habit Chart</div>
-                    <div id="monthly-pie-chart" style="position: relative; height: 180px; display: flex; align-items: center; justify-content: center;"></div>
+                    <div id="monthly-pie-chart" class="monthly-chart-area--pie"></div>
                 </div>
             </div>
 
@@ -192,11 +191,11 @@
                     </thead>
                     <tbody>
                         <tr id="gr-row-1">
-                            <td><input type="text" id="gr-name-1" onchange="saveMonthly()" placeholder="Goal 1"></td>
-                            <td><input type="text" id="gr-target-1" onchange="saveMonthly()" placeholder="E.g., 20 Hours"></td>
-                            <td><input type="text" id="gr-actual-1" onchange="saveMonthly()" placeholder="Actual..."></td>
+                            <td><input type="text" id="gr-name-1" placeholder="Goal 1"></td>
+                            <td><input type="text" id="gr-target-1" placeholder="E.g., 20 Hours"></td>
+                            <td><input type="text" id="gr-actual-1" placeholder="Actual..."></td>
                             <td>
-                                <select id="gr-status-1" onchange="updateRowStatus(1); saveMonthly();">
+                                <select id="gr-status-1">
                                     <option value="Pending">Pending</option>
                                     <option value="Achieved">Achieved</option>
                                     <option value="Missed">Missed</option>
@@ -204,21 +203,21 @@
                             </td>
                         </tr>
                         <tr id="gr-row-2">
-                            <td><input type="text" id="gr-name-2" onchange="saveMonthly()" placeholder="Goal 2"></td>
-                            <td><input type="text" id="gr-target-2" onchange="saveMonthly()" placeholder="..."></td>
-                            <td><input type="text" id="gr-actual-2" onchange="saveMonthly()" placeholder="..."></td>
+                            <td><input type="text" id="gr-name-2" placeholder="Goal 2"></td>
+                            <td><input type="text" id="gr-target-2" placeholder="..."></td>
+                            <td><input type="text" id="gr-actual-2" placeholder="..."></td>
                             <td>
-                                <select id="gr-status-2" onchange="updateRowStatus(2); saveMonthly();">
+                                <select id="gr-status-2">
                                     <option value="Pending">Pending</option><option value="Achieved">Achieved</option><option value="Missed">Missed</option>
                                 </select>
                             </td>
                         </tr>
                         <tr id="gr-row-3">
-                            <td><input type="text" id="gr-name-3" onchange="saveMonthly()" placeholder="Goal 3"></td>
-                            <td><input type="text" id="gr-target-3" onchange="saveMonthly()" placeholder="..."></td>
-                            <td><input type="text" id="gr-actual-3" onchange="saveMonthly()" placeholder="..."></td>
+                            <td><input type="text" id="gr-name-3" placeholder="Goal 3"></td>
+                            <td><input type="text" id="gr-target-3" placeholder="..."></td>
+                            <td><input type="text" id="gr-actual-3" placeholder="..."></td>
                             <td>
-                                <select id="gr-status-3" onchange="updateRowStatus(3); saveMonthly();">
+                                <select id="gr-status-3">
                                     <option value="Pending">Pending</option><option value="Achieved">Achieved</option><option value="Missed">Missed</option>
                                 </select>
                             </td>
@@ -230,12 +229,12 @@
     </div>
 
     <div id="month-picker-modal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 680px;">
+        <div class="modal-content modal-content--md">
             <div class="modal-header">
-                <h2 style="margin:0; color:var(--text-main); font-weight:800;">📅 Select Month to Plan</h2>
-                <button class="modal-close" onclick="closeMonthPickerModal()">×</button>
+                <h2>📅 Select Month to Plan</h2>
+                <button class="modal-close" data-close="month-picker-modal">×</button>
             </div>
-            <p style="font-size:12px; color:var(--text-gray); margin: -10px 0 20px; font-weight:600;">Past months are disabled. Click an available month to switch dashboard view.</p>
+            <p class="modal-subtitle">Past months are disabled. Click an available month to switch dashboard view.</p>
             <div class="month-picker__grid" id="month-picker-grid"></div>
         </div>
     </div>

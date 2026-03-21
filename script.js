@@ -208,28 +208,47 @@ function renameUser(e) {
 }
 
 function initNotesUI() {
-    let html = '';
-    for(let i=1; i<=10; i++) {
-        html += `<div style="display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700;">
-                    <label style="width:25px; text-align:right;">${i}.</label>
-                    <input type="text" id="note_input_${i}" onchange="_state.notes['note_${i}']=this.value; scheduleSave()" placeholder="..." 
-                        style="flex-grow: 1; padding: 8px; border: 2px solid rgba(194, 139, 98, 0.4); border-radius: 6px; font-family: inherit; font-size: 13px; outline: none; background: rgba(255, 255, 255, 0.9);">
-                 </div>`;
+    const container = document.getElementById('notes-container');
+    container.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    for (let i = 1; i <= 10; i++) {
+        const row = document.createElement('div');
+        row.className = 'note-row';
+        const label = document.createElement('label');
+        label.textContent = `${i}.`;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = `note_input_${i}`;
+        input.placeholder = '...';
+        row.appendChild(label);
+        row.appendChild(input);
+        fragment.appendChild(row);
     }
-    document.getElementById('notes-container').innerHTML = html;
+    container.appendChild(fragment);
 }
 
 function initAbbrUI() {
-    let html = '';
-    for(let i=1; i<=10; i++) {
-        html += `<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
-                    <input type="text" id="abbr_k_${i}" onchange="saveAbbrData()" placeholder="" style="padding: 6px; border: 2px solid rgba(194, 139, 98, 0.4); border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; background: rgba(255, 255, 255, 0.9);">
-                    <input type="text" id="abbr_v_${i}" onchange="saveAbbrData()" placeholder="" style="padding: 6px; border: 2px solid rgba(194, 139, 98, 0.4); border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; background: rgba(255, 255, 255, 0.9);">
-                 </div>`;
+    const container = document.getElementById('abbr-container');
+    container.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    for (let i = 1; i <= 10; i++) {
+        const row = document.createElement('div');
+        row.className = 'abbr-row';
+        const kInput = document.createElement('input');
+        kInput.type = 'text';
+        kInput.id = `abbr_k_${i}`;
+        kInput.placeholder = '';
+        const vInput = document.createElement('input');
+        vInput.type = 'text';
+        vInput.id = `abbr_v_${i}`;
+        vInput.placeholder = '';
+        row.appendChild(kInput);
+        row.appendChild(vInput);
+        fragment.appendChild(row);
     }
-    document.getElementById('abbr-container').innerHTML = html;
+    container.appendChild(fragment);
     
-    for(let i=1; i<=10; i++) {
+    for (let i = 1; i <= 10; i++) {
         document.getElementById(`abbr_k_${i}`).value = appData.abbrs?.[`abbr_k_${i}`] || "";
         document.getElementById(`abbr_v_${i}`).value = appData.abbrs?.[`abbr_v_${i}`] || "";
     }
@@ -301,10 +320,7 @@ function continueInit() {
     loadWeekData();
     updateAll();
     checkAndFocusToday();
-
-    document.addEventListener('click', () => {
-        document.getElementById('priority-menu').style.display = 'none';
-    });
+    initEventDelegation();
 }
 
 function checkAndFocusToday() {
@@ -391,27 +407,65 @@ function renderCalendar() {
     const firstDay = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate();
     let startDay = firstDay === 0 ? 6 : firstDay - 1;
 
-    const calGrid = document.getElementById('cal-grid-days'); let html = '';
-    for(let i=0; i<startDay; i++) { html += `<div class="cal-date"></div>`; }
-    for(let i=1; i<=daysInMonth; i++) {
-        if(i === today && isCurrentMonth && viewingWeekId === currentRealWeekId) { html += `<div class="cal-date today">${i}</div>`; } 
-        else { html += `<div class="cal-date">${i}</div>`; }
+    const calGrid = document.getElementById('cal-grid-days');
+    calGrid.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < startDay; i++) {
+        const el = document.createElement('div');
+        el.className = 'cal-date';
+        fragment.appendChild(el);
     }
-    calGrid.innerHTML = html;
+    for (let i = 1; i <= daysInMonth; i++) {
+        const el = document.createElement('div');
+        el.className = 'cal-date';
+        if (i === today && isCurrentMonth && viewingWeekId === currentRealWeekId) el.classList.add('today');
+        el.textContent = i;
+        fragment.appendChild(el);
+    }
+    calGrid.appendChild(fragment);
 }
 
 function autoResizeTextarea(el) { el.style.height = '18px'; el.style.height = el.scrollHeight + 'px'; }
 
 function renderHabits() {
     const container = document.getElementById('habit-container');
-    let html = `<div class="habit-header">Habit</div>`;
-    dayKeys.forEach(d => html += `<div class="habit-header">${d}</div>`);
-    
-    for(let h = 0; h < habitsCount; h++) {
-        html += `<div class="h-name"><textarea class="habit-input" id="h_name_${h}" placeholder="..." oninput="autoResizeTextarea(this); _state.habits['h_name_${h}']=this.value; scheduleSave()" rows="1"></textarea></div>`;
-        for(let d = 0; d < 7; d++) { html += `<div><input type="checkbox" id="h_check_${h}_${d}" onchange="_state.habits['h_check_${h}_${d}']=this.checked; scheduleSave()"></div>`; }
+    container.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
+    // Header row
+    const headerHabit = document.createElement('div');
+    headerHabit.className = 'habit-header';
+    headerHabit.textContent = 'Habit';
+    fragment.appendChild(headerHabit);
+    dayKeys.forEach(d => {
+        const hd = document.createElement('div');
+        hd.className = 'habit-header';
+        hd.textContent = d;
+        fragment.appendChild(hd);
+    });
+
+    // Habit rows
+    for (let h = 0; h < habitsCount; h++) {
+        const nameCell = document.createElement('div');
+        nameCell.className = 'h-name';
+        const textarea = document.createElement('textarea');
+        textarea.className = 'habit-input';
+        textarea.id = `h_name_${h}`;
+        textarea.placeholder = '...';
+        textarea.rows = 1;
+        nameCell.appendChild(textarea);
+        fragment.appendChild(nameCell);
+
+        for (let d = 0; d < 7; d++) {
+            const cell = document.createElement('div');
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.id = `h_check_${h}_${d}`;
+            cell.appendChild(cb);
+            fragment.appendChild(cell);
+        }
     }
-    container.innerHTML = html;
+    container.appendChild(fragment);
 }
 
 function formatTimeInput(el) {
@@ -444,66 +498,152 @@ function handleTimeNavigation(e, dIdx, tIdx, currentIdx) {
     }
 }
 
+function createTaskElement(dIdx, tIdx) {
+    const taskDiv = document.createElement('div');
+    taskDiv.className = 'task-item';
+    taskDiv.id = `task_div_${dIdx}_${tIdx}`;
+    taskDiv.setAttribute('data-priority', '3');
+    taskDiv.setAttribute('data-delay', '0');
+    taskDiv.setAttribute('ondrop', `dropOnTaskItem(event, ${dIdx}, ${tIdx})`);
+    taskDiv.setAttribute('ondragover', 'dragOverTask(event)');
+
+    // drag zone
+    const dragZone = document.createElement('div');
+    dragZone.className = 'task-drag-zone';
+    dragZone.draggable = true;
+    dragZone.title = 'Drag to move';
+
+    const starIcon = document.createElement('div');
+    starIcon.className = 'task-star-icon';
+    starIcon.textContent = '⭐';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `t_check_${dIdx}_${tIdx}`;
+
+    dragZone.appendChild(starIcon);
+    dragZone.appendChild(checkbox);
+
+    // input container
+    const inputContainer = document.createElement('div');
+    inputContainer.className = 'task-input-container';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.id = `t_name_${dIdx}_${tIdx}`;
+    nameInput.className = 't-name';
+    nameInput.placeholder = '';
+
+    const timeWrapper = document.createElement('div');
+    timeWrapper.className = 'time-input-wrapper';
+
+    function makeTimePart(fieldName, idx) {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.id = `t_${fieldName}_${dIdx}_${tIdx}`;
+        inp.className = 't-time-part';
+        inp.maxLength = 2;
+        inp.placeholder = '--';
+        return inp;
+    }
+    function makeColon() { const s = document.createElement('span'); s.className = 'time-colon'; s.textContent = ':'; return s; }
+    function makeSep() { const s = document.createElement('span'); s.className = 'time-separator'; s.textContent = '-'; return s; }
+
+    timeWrapper.appendChild(makeTimePart('h_start', 0));
+    timeWrapper.appendChild(makeColon());
+    timeWrapper.appendChild(makeTimePart('m_start', 1));
+    timeWrapper.appendChild(makeSep());
+    timeWrapper.appendChild(makeTimePart('h_end', 2));
+    timeWrapper.appendChild(makeColon());
+    timeWrapper.appendChild(makeTimePart('m_end', 3));
+
+    inputContainer.appendChild(nameInput);
+    inputContainer.appendChild(timeWrapper);
+
+    // delay badge
+    const badge = document.createElement('span');
+    badge.className = 'delay-badge';
+    badge.id = `delay_badge_${dIdx}_${tIdx}`;
+    badge.style.display = 'none';
+
+    taskDiv.appendChild(dragZone);
+    taskDiv.appendChild(inputContainer);
+    taskDiv.appendChild(badge);
+    return taskDiv;
+}
+
 function renderDays() {
     const mainContainer = document.getElementById('main-grid');
-    let allDaysHtml = '';
+    const fragment = document.createDocumentFragment();
     
     daysData.forEach((dayObj, dIdx) => {
-        let tasksHtml = '';
-        for(let t = 0; t < tasksPerDay; t++) {
-            tasksHtml += `
-                <div class="task-item" id="task_div_${dIdx}_${t}" data-priority="3" data-delay="0" 
-                     ondrop="dropOnTaskItem(event, ${dIdx}, ${t})" ondragover="dragOverTask(event)">
-                    <div class="task-drag-zone" draggable="true" ondragstart="dragStartTask(event, ${dIdx}, ${t})" title="Drag to move">
-                        <div class="task-star-icon">⭐</div>
-                        <input type="checkbox" id="t_check_${dIdx}_${t}" onchange="_state.tasks['t_check_${dIdx}_${t}']=this.checked; updateDayAndSave(${dIdx})" oncontextmenu="showContextMenu(event, ${dIdx}, ${t})">
-                    </div>
-                    <div class="task-input-container">
-                        <input type="text" id="t_name_${dIdx}_${t}" class="t-name" placeholder="" onchange="_state.tasks['t_name_${dIdx}_${t}']=this.value; updateDayAndSave(${dIdx})">
-                        <div class="time-input-wrapper">
-                            <input type="text" id="t_h_start_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); _state.tasks['t_h_start_${dIdx}_${t}']=this.value; updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 0)">
-                            <span class="time-colon">:</span>
-                            <input type="text" id="t_m_start_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); _state.tasks['t_m_start_${dIdx}_${t}']=this.value; updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 1)">
-                            <span class="time-separator">-</span>
-                            <input type="text" id="t_h_end_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); _state.tasks['t_h_end_${dIdx}_${t}']=this.value; updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 2)">
-                            <span class="time-colon">:</span>
-                            <input type="text" id="t_m_end_${dIdx}_${t}" class="t-time-part" maxlength="2" placeholder="--" onchange="formatTimeInput(this); _state.tasks['t_m_end_${dIdx}_${t}']=this.value; updateDayAndSave(${dIdx})" onkeydown="handleTimeNavigation(event, ${dIdx}, ${t}, 3)">
-                        </div>
-                    </div>
-                    <span class="delay-badge" id="delay_badge_${dIdx}_${t}" style="display:none;" title=""></span>
-                </div>
-            `;
-        }
+        const gridItem = document.createElement('div');
+        gridItem.className = 'grid-item';
 
-        allDaysHtml += `
-            <div class="grid-item">
-                <div class="day-header" id="day_header_${dIdx}" style="background-color: ${dayObj.bg};"></div>
-                <div class="day-content">
-                    <div class="chart-section">
-                        <div class="daily-donut">
-                            <svg width="70" height="70" viewBox="0 0 70 70">
-                                <circle class="circle-bg" cx="35" cy="35" r="28"></circle>
-                                <circle id="circle_${dIdx}" class="circle-progress" cx="35" cy="35" r="28" style="stroke: ${dayObj.stroke};"></circle>
-                            </svg>
-                            <div class="percent-text" id="pct_${dIdx}">0%</div>
-                        </div>
-                    </div>
-                    <div class="stats-row">
-                        <div>Completed<br><span id="done_${dIdx}">0</span></div>
-                        <div>In Progress<br><span id="prog_${dIdx}">0</span></div>
-                        <div>Total<br><span id="total_${dIdx}">0</span></div>
-                    </div>
-                    <div class="task-list" id="task_list_${dIdx}" ondragover="dragOverTask(event)" ondrop="dropTask(event, ${dIdx})">
-                        ${tasksHtml}
-                    </div>
-                    <div class="day-progress-bar-container">
-                        <div class="day-progress-bar" id="day_prog_bar_${dIdx}"></div>
-                    </div>
-                </div>
-            </div>
-        `;
+        // Day header
+        const dayHeader = document.createElement('div');
+        dayHeader.className = 'day-header';
+        dayHeader.id = `day_header_${dIdx}`;
+        dayHeader.style.backgroundColor = dayObj.bg;
+
+        // Day content
+        const dayContent = document.createElement('div');
+        dayContent.className = 'day-content';
+
+        // Donut chart
+        const chartSection = document.createElement('div');
+        chartSection.className = 'chart-section';
+        const donut = document.createElement('div');
+        donut.className = 'daily-donut';
+        donut.innerHTML = `<svg width="70" height="70" viewBox="0 0 70 70">
+            <circle class="circle-bg" cx="35" cy="35" r="28"></circle>
+            <circle id="circle_${dIdx}" class="circle-progress" cx="35" cy="35" r="28" style="stroke: ${dayObj.stroke};"></circle>
+        </svg>`;
+        const pctText = document.createElement('div');
+        pctText.className = 'percent-text';
+        pctText.id = `pct_${dIdx}`;
+        pctText.textContent = '0%';
+        donut.appendChild(pctText);
+        chartSection.appendChild(donut);
+
+        // Stats row
+        const statsRow = document.createElement('div');
+        statsRow.className = 'stats-row';
+        [['Completed', `done_${dIdx}`], ['In Progress', `prog_${dIdx}`], ['Total', `total_${dIdx}`]].forEach(([label, id]) => {
+            const d = document.createElement('div');
+            d.innerHTML = `${label}<br><span id="${id}">0</span>`;
+            statsRow.appendChild(d);
+        });
+
+        // Task list
+        const taskList = document.createElement('div');
+        taskList.className = 'task-list';
+        taskList.id = `task_list_${dIdx}`;
+        const taskFragment = document.createDocumentFragment();
+        for (let t = 0; t < tasksPerDay; t++) {
+            taskFragment.appendChild(createTaskElement(dIdx, t));
+        }
+        taskList.appendChild(taskFragment);
+
+        // Progress bar
+        const progBarContainer = document.createElement('div');
+        progBarContainer.className = 'day-progress-bar-container';
+        const progBar = document.createElement('div');
+        progBar.className = 'day-progress-bar';
+        progBar.id = `day_prog_bar_${dIdx}`;
+        progBarContainer.appendChild(progBar);
+
+        dayContent.appendChild(chartSection);
+        dayContent.appendChild(statsRow);
+        dayContent.appendChild(taskList);
+        dayContent.appendChild(progBarContainer);
+
+        gridItem.appendChild(dayHeader);
+        gridItem.appendChild(dayContent);
+        fragment.appendChild(gridItem);
     });
-    mainContainer.insertAdjacentHTML('beforeend', allDaysHtml);
+    
+    mainContainer.appendChild(fragment);
 }
 
 function dragStartTask(e, dIdx, tIdx) {
@@ -871,7 +1011,7 @@ function loadMonthlyData() {
     const weekBlocks = getMonthWeeks();
     const colsContainer = document.getElementById('modal-weekly-cols');
     colsContainer.style.gridTemplateColumns = 'repeat(5, 1fr)';
-    let colsHtml = '';
+    const colsFragment = document.createDocumentFragment();
 
     let dailyTaskPcts = [];
 
@@ -907,24 +1047,29 @@ function loadMonthlyData() {
             for (let d = 0; d < 7; d++) dailyTaskPcts.push(0);
         }
 
-        colsHtml += `
-            <div class="week-card">
-                <h4 style="font-size:11px; margin:0 0 10px; text-transform:none;">${block.label}</h4>
-                <div class="week-card-stats">
-                    <div>
-                        <div style="font-size:18px; font-weight:800; color:var(--text-main);">${taskPct}%</div>
-                        <div style="font-size:10px; color:#888;">Tasks</div>
-                    </div>
-                    <div>
-                        <div style="font-size:14px; font-weight:800; color:var(--border-darker);">${habPct}%</div>
-                        <div style="font-size:10px; color:#888;">Habits</div>
-                    </div>
-                </div>
-                <button class="nav-btn detail-btn" onclick="switchToWeek('${wIdForNav}')">Detail</button>
-            </div>
-        `;
+        const card = document.createElement('div');
+        card.className = 'week-card';
+
+        const h4 = document.createElement('h4');
+        h4.style.cssText = 'font-size:11px; margin:0 0 10px; text-transform:none;';
+        h4.textContent = block.label;
+
+        const stats = document.createElement('div');
+        stats.className = 'week-card-stats';
+        stats.innerHTML = `<div><div class="week-card__pct">${taskPct}%</div><div class="week-card__label">Tasks</div></div>` +
+                          `<div><div style="font-size:14px; font-weight:800; color:var(--border-darker);">${habPct}%</div><div class="week-card__label">Habits</div></div>`;
+
+        const btn = document.createElement('button');
+        btn.className = 'nav-btn detail-btn';
+        btn.onclick = () => switchToWeek(wIdForNav);
+        btn.textContent = 'Detail';
+
+        card.appendChild(h4);
+        card.appendChild(stats);
+        card.appendChild(btn);
+        colsFragment.appendChild(card);
     });
-    colsContainer.innerHTML = colsHtml;
+    colsContainer.appendChild(colsFragment);
 
     let barHtml = `<svg viewBox="0 -10 750 180" style="width:100%; height:100%; overflow:visible;">`;
     barHtml += `<line x1="40" y1="10" x2="740" y2="10" stroke="rgba(139, 94, 60, 0.2)" stroke-dasharray="4" stroke-width="1"></line>`;
@@ -1120,4 +1265,232 @@ function switchToMonth(monthId) {
     closeMonthPickerModal();
     generateWeekDates(viewingWeekId);
     rebuildUI();
+}
+
+// ============================================================
+// EVENT DELEGATION (Tasks 4-6)
+// ============================================================
+
+function initEventDelegation() {
+    // document-level
+    document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('contextmenu', handleDocumentContextMenu);
+
+    // auth overlay
+    document.getElementById('auth-overlay').addEventListener('click', handleAuthClick);
+
+    // top-nav
+    document.querySelector('.top-nav').addEventListener('click', handleTopNavClick);
+
+    // priority menu
+    document.getElementById('priority-menu').addEventListener('click', handlePriorityMenuClick);
+
+    // main grid
+    const mainGrid = document.getElementById('main-grid');
+    mainGrid.addEventListener('change', handleMainGridChange);
+    mainGrid.addEventListener('contextmenu', handleMainGridContextMenu);
+    mainGrid.addEventListener('dragstart', handleMainGridDragStart);
+    mainGrid.addEventListener('dragover', handleMainGridDragOver);
+    mainGrid.addEventListener('drop', handleMainGridDrop);
+
+    // habit container
+    const habitContainer = document.getElementById('habit-container');
+    habitContainer.addEventListener('change', handleHabitChange);
+    habitContainer.addEventListener('input', handleHabitInput);
+
+    // modal close buttons (delegation on body)
+    document.body.addEventListener('click', handleModalCloseClick);
+
+    // notes container (inside modal — delegated on document since modal may not exist yet)
+    document.addEventListener('change', handleNotesChange);
+    document.addEventListener('change', handleAbbrChange);
+    document.addEventListener('change', handleMonthlyModalChange);
+
+    // keydown for time navigation (delegated on main-grid)
+    mainGrid.addEventListener('keydown', handleMainGridKeydown);
+}
+
+// --- Document-level handlers ---
+
+function handleDocumentClick(e) {
+    // Close priority menu when clicking outside
+    const menu = document.getElementById('priority-menu');
+    if (menu && !menu.contains(e.target)) {
+        menu.style.display = 'none';
+    }
+    // Close focus backdrop when clicking it
+    if (e.target && e.target.id === 'focus-backdrop') {
+        closeFocus();
+    }
+}
+
+function handleDocumentContextMenu(e) {
+    if (e.target && e.target.id === 'greeting-text') {
+        renameUser(e);
+    }
+}
+
+// --- Auth ---
+
+function handleAuthClick(e) {
+    const btn = e.target.closest('[data-action="login"]');
+    if (btn) handleLogin();
+}
+
+// --- Top Nav ---
+
+function handleTopNavClick(e) {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === 'open-monthly') openMonthlyModal();
+    else if (action === 'open-month-picker') openMonthPickerModal();
+    else if (action === 'logout') handleLogout();
+    else if (action === 'open-notes') openNoteModal();
+    else if (action === 'open-abbr') openAbbrModal();
+}
+
+// --- Priority Menu ---
+
+function handlePriorityMenuClick(e) {
+    const item = e.target.closest('[data-priority]');
+    if (!item) return;
+    setPriority(item.dataset.priority === '0' ? 0 :
+                item.dataset.priority === '1' ? 1 :
+                item.dataset.priority === '2' ? 2 :
+                item.dataset.priority === '3' ? 3 :
+                item.dataset.priority);
+}
+
+// --- Modal Close ---
+
+function handleModalCloseClick(e) {
+    const btn = e.target.closest('[data-close]');
+    if (!btn) return;
+    const modalId = btn.dataset.close;
+    if (modalId === 'note-modal') closeNoteModal();
+    else if (modalId === 'abbr-modal') closeAbbrModal();
+    else if (modalId === 'monthly-modal') closeMonthlyModal();
+    else if (modalId === 'month-picker-modal') closeMonthPickerModal();
+}
+
+// --- Main Grid ---
+
+function handleMainGridContextMenu(e) {
+    const cb = e.target.closest('input[type="checkbox"]');
+    if (!cb) return;
+    const taskItem = cb.closest('.task-item');
+    if (!taskItem) return;
+    const parts = taskItem.id.split('_');
+    showContextMenu(e, parseInt(parts[2]), parseInt(parts[3]));
+}
+
+function handleMainGridChange(e) {
+    const taskItem = e.target.closest('.task-item');
+    if (!taskItem) return;
+    const parts = taskItem.id.split('_'); // task_div_{d}_{t}
+    const d = parseInt(parts[2]);
+    const t = parseInt(parts[3]);
+
+    if (e.target.type === 'checkbox' && e.target.id.startsWith('t_check_')) {
+        _stateSetTask(d, t, 'check', e.target.checked);
+        updateDayAndSave(d);
+    } else if (e.target.classList.contains('t-name')) {
+        _stateSetTask(d, t, 'name', e.target.value);
+        updateDayAndSave(d);
+    } else if (e.target.classList.contains('t-time-part')) {
+        formatTimeInput(e.target);
+        // Extract field from id: t_h_start_{d}_{t} → h_start
+        const fieldMatch = e.target.id.match(/^t_([a-z_]+)_\d+_\d+$/);
+        if (fieldMatch) {
+            _stateSetTask(d, t, fieldMatch[1], e.target.value);
+            updateDayAndSave(d);
+        }
+    }
+}
+
+function handleMainGridKeydown(e) {
+    const input = e.target;
+    if (!input.classList.contains('t-time-part')) return;
+    const taskItem = input.closest('.task-item');
+    if (!taskItem) return;
+    const parts = taskItem.id.split('_');
+    const d = parseInt(parts[2]);
+    const t = parseInt(parts[3]);
+    const types = ['h_start', 'm_start', 'h_end', 'm_end'];
+    const currentIdx = types.findIndex(tp => input.id === `t_${tp}_${d}_${t}`);
+    if (currentIdx === -1) return;
+    handleTimeNavigation(e, d, t, currentIdx);
+}
+
+function handleMainGridDragStart(e) {
+    const dragZone = e.target.closest('.task-drag-zone');
+    if (!dragZone) return;
+    const taskItem = dragZone.closest('.task-item');
+    if (!taskItem) return;
+    const parts = taskItem.id.split('_');
+    const dIdx = parseInt(parts[2]);
+    const tIdx = parseInt(parts[3]);
+    dragStartTask(e, dIdx, tIdx);
+}
+
+function handleMainGridDragOver(e) {
+    dragOverTask(e);
+}
+
+function handleMainGridDrop(e) {
+    const taskItem = e.target.closest('.task-item');
+    if (taskItem) {
+        const parts = taskItem.id.split('_');
+        dropOnTaskItem(e, parseInt(parts[2]), parseInt(parts[3]));
+        return;
+    }
+    const taskList = e.target.closest('.task-list');
+    if (taskList) {
+        const dIdx = parseInt(taskList.id.replace('task_list_', ''));
+        dropTask(e, dIdx);
+    }
+}
+
+// --- Habit Container ---
+
+function handleHabitChange(e) {
+    if (e.target.type === 'checkbox' && e.target.id.startsWith('h_check_')) {
+        _state.habits[e.target.id] = e.target.checked;
+        scheduleSave();
+    } else if (e.target.tagName === 'TEXTAREA' && e.target.id.startsWith('h_name_')) {
+        _state.habits[e.target.id] = e.target.value;
+        scheduleSave();
+    }
+}
+
+function handleHabitInput(e) {
+    if (e.target.tagName === 'TEXTAREA') {
+        autoResizeTextarea(e.target);
+        _state.habits[e.target.id] = e.target.value;
+    }
+}
+
+// --- Notes / Abbr / Monthly (delegated on document) ---
+
+function handleNotesChange(e) {
+    if (!e.target.id || !e.target.id.startsWith('note_input_')) return;
+    const i = e.target.id.replace('note_input_', '');
+    _state.notes[`note_${i}`] = e.target.value;
+    scheduleSave();
+}
+
+function handleAbbrChange(e) {
+    if (!e.target.id || (!e.target.id.startsWith('abbr_k_') && !e.target.id.startsWith('abbr_v_'))) return;
+    saveAbbrData();
+}
+
+function handleMonthlyModalChange(e) {
+    const modal = document.getElementById('monthly-modal');
+    if (!modal || !modal.contains(e.target)) return;
+    if (e.target.id && e.target.id.startsWith('gr-status-')) {
+        const idx = parseInt(e.target.id.replace('gr-status-', ''));
+        updateRowStatus(idx);
+    }
+    saveMonthly();
 }
