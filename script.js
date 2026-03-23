@@ -8,10 +8,15 @@
 // ============================================================
 // 1. SUPABASE CLIENT (credentials from config.js)
 // ============================================================
-const sbClient = window.supabase.createClient(
-    window.APP_CONFIG.supabaseUrl,
-    window.APP_CONFIG.supabaseKey
-);
+let sbClient;
+try {
+    sbClient = window.supabase.createClient(
+        window.APP_CONFIG.supabaseUrl,
+        window.APP_CONFIG.supabaseKey
+    );
+} catch (err) {
+    console.error('[APP] Supabase init failed — config.js may not have loaded:', err);
+}
 
 // ============================================================
 // 2. CONSTANTS (immutable config)
@@ -1287,7 +1292,7 @@ function initEventDelegation() {
     document.addEventListener('click',       handleDocumentClick);
     document.addEventListener('contextmenu', handleDocumentContextMenu);
     document.getElementById('auth-overlay').addEventListener('click', handleAuthClick);
-    document.querySelector('.top-nav').addEventListener('click', handleTopNavClick);
+    document.addEventListener('click', (e) => { if (e.target.closest('[data-action]')) handleTopNavClick(e); });
     document.getElementById('priority-menu').addEventListener('click', handlePriorityMenuClick);
     document.body.addEventListener('click', handleModalCloseClick);
     document.addEventListener('change', handleNotesChange);
