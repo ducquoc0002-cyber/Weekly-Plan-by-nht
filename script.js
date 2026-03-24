@@ -252,7 +252,7 @@ async function loadGlobalDataFromDB() {
     if (!d.weeks)   d.weeks   = {};
     if (!d.monthly) d.monthly = {};
     if (!d.abbrs)   d.abbrs   = {};
-}
+    if (!d.settings) d.settings = { persistentNotes: false, persistentAbbr: false, persistentHabit: false, language: 'en' };}
 
 function saveGlobalData() {
     localStorage.setItem('plan_app_data', JSON.stringify(store.appData));
@@ -423,11 +423,51 @@ function continueInit() {
     loadWeekData();
     updateAll();
     checkAndFocusToday();
+    initSettingsUI();
     initEventDelegation();
 }
 
+function initSettingsUI() {
+    const s = store.appData.settings || {};
+    document.getElementById('setting-persistent-notes').checked = !!s.persistentNotes;
+    document.getElementById('setting-persistent-abbr').checked  = !!s.persistentAbbr;
+    document.getElementById('setting-persistent-habit').checked = !!s.persistentHabit;
+    document.getElementById('setting-language').value           = s.language || 'en';
+}
+
+function _getLastActiveWeekId() {
+    const weeks = store.appData.weeks;
+    const ids = Object.keys(weeks).filter(id => id !== store.viewingWeekId).sort().reverse();
+    return ids[0] || null;
+}
+
+function _applyPersistentData(targetWeekId) {
+    try {
+        const s = store.appData.settings || {};
+        const lastId = _getLastActiveWeekId();
+        if (!lastId) return;
+        const src = store.appData.weeks[lastId];
+        const dst = store.appData.weeks[targetWeekId];
+        if (s.persistentNotes && src.notes) {
+            dst.notes = JSON.parse(JSON.stringify(src.notes));
+        }
+        if (s.persistentAbbr && store.appData.abbrs) {
+            // abbrs là global, không cần copy per-week
+        }
+        if (s.persistentHabit && src.habits) {
+            // Chỉ copy tên habit, không copy trạng thái check
+            const habitNames = {};
+            for (let h = 0; h < HABITS_COUNT; h++) {
+                habitNames[`h_name_${h}`] = src.habits[`h_name_${h}`] || '';
+            }
+            dst.habits = Object.assign({}, dst.habits, habitNames);
+        }
+    } catch (e) {
+        console.warn('[Persistent] Copy failed:', e);
+    }
+}
+
 function rebuildUI() {
-    renderCalendar();
     document.getElementById('main-grid').querySelectorAll('.grid-item:nth-child(n+3)').forEach(e => e.remove());
     renderDays();
     loadWeekData();
@@ -1165,6 +1205,7 @@ function switchToWeek(targetWeekId) {
     }
     if (!store.appData.weeks[store.viewingWeekId]) {
         store.appData.weeks[store.viewingWeekId] = { tasks: {}, habits: {}, notes: {} };
+        _applyPersistentData(store.viewingWeekId);
     }
     closeMonthlyModal();
     generateWeekDates(store.viewingWeekId);
@@ -1228,6 +1269,7 @@ function switchToMonth(monthId) {
     const targetWeekId    = formatDateKey(mondayOfFirst);
     if (!store.appData.weeks[targetWeekId]) {
         store.appData.weeks[targetWeekId] = { tasks: {}, habits: {}, notes: {} };
+        _applyPersistentData(targetWeekId);
     }
     store.viewingMonthId = monthId;
     const now = new Date();
@@ -1319,6 +1361,19 @@ function initEventDelegation() {
     const habitContainer = document.getElementById('habit-container');
     habitContainer.addEventListener('change', handleHabitChange);
     habitContainer.addEventListener('input',  handleHabitInput);
+
+    // Settings toggles & language
+    ['setting-persistent-notes', 'setting-persistent-abbr', 'setting-persistent-habit'].forEach(id => {
+        document.getElementById(id).addEventListener('change', (e) => {
+            const keyMap = { 'setting-persistent-notes': 'persistentNotes', 'setting-persistent-abbr': 'persistentAbbr', 'setting-persistent-habit': 'persistentHabit' };
+            store.appData.settings[keyMap[id]] = e.target.checked;
+            saveGlobalData();
+        });
+    });
+    document.getElementById('setting-language').addEventListener('change', (e) => {
+        store.appData.settings.language = e.target.value;
+        saveGlobalData();
+    });
 
     // Scroll on drag: lăn chuột khi đang giữ task
     let _wheelRafId = null;

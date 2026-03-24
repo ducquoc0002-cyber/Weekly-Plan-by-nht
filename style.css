@@ -321,6 +321,28 @@ svg.wave-chart { width: 100%; height: 90px; overflow: visible; display: block; }
 .settings-section { margin-bottom: 20px; }
 .settings-section__title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-gray); margin-bottom: 10px; }
 
+.settings-modal__content { display: flex; flex-direction: column; min-height: 320px; }
+.settings-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.settings-footer { margin-top: auto; padding-top: 16px; border-top: 1px dashed var(--border-medium); }
+
+/* Toggle switch (BEM) */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; cursor: pointer; }
+.toggle-row__label { font-size: 13px; font-weight: 600; color: var(--text-main); }
+.toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-switch__slider { position: absolute; inset: 0; background: var(--border-medium); border-radius: 22px; transition: background 0.25s; cursor: pointer; }
+.toggle-switch__slider::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.25s; }
+.toggle-switch input:checked + .toggle-switch__slider { background: var(--success-green); }
+.toggle-switch input:checked + .toggle-switch__slider::before { transform: translateX(18px); }
+
+/* Settings language select */
+.settings-select { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border-medium); border-radius: 8px; background: var(--widget-bg); color: var(--text-main); font-family: var(--font-main); font-size: 13px; font-weight: 600; cursor: pointer; }
+
+/* Monthly modal header with Monthly Basis button */
+#monthly-modal .modal-header { gap: 10px; }
+#monthly-modal .modal-header h2 { flex: 1; }
+.nav-btn--sm { padding: 5px 10px; font-size: 11px; }
+
 /* Monthly modal */
 .monthly-section { margin-bottom: 25px; background: rgba(255,255,255,0.7); padding: 20px; border-radius: 16px; border: 2px solid var(--border-medium); box-shadow: 0 4px 15px rgba(0,0,0,0.03);}
 .monthly-section-title { font-weight: 800; text-transform: uppercase; color: var(--border-darker); margin-bottom: 15px; font-size: 14px; letter-spacing: 0.5px; }
