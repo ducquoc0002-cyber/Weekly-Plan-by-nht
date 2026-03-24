@@ -41,7 +41,7 @@
             <div class="page-main-title" id="board-title">CURRENT WEEK</div>
         </div>
 
-        <button class="nav-btn nav-btn--danger" data-action="logout">🚪 Logout</button>
+        <button class="nav-btn" data-action="open-settings">⚙️ Settings</button>
     </div>
 
     <div id="priority-menu" class="context-menu">
@@ -237,6 +237,19 @@
             </div>
             <p class="modal-subtitle">Past months are disabled. Click an available month to switch dashboard view.</p>
             <div class="month-picker__grid" id="month-picker-grid"></div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-content modal-content--xs">
+            <div class="modal-header">
+                <h2>⚙️ Settings</h2>
+                <button class="modal-close" data-close="settings-modal">×</button>
+            </div>
+            <div class="settings-section">
+                <div class="settings-section__title">Account</div>
+                <button class="nav-btn nav-btn--danger nav-btn--full" data-action="logout">🚪 Logout</button>
+            </div>
         </div>
     </div>
 

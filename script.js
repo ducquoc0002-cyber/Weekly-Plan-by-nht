@@ -1043,6 +1043,8 @@ function openNoteModal()    { store.openModal(); document.getElementById('note-m
 function closeNoteModal()   { store.closeModal(); document.getElementById('note-modal').style.display = 'none'; }
 function openAbbrModal()    { store.openModal(); document.getElementById('abbr-modal').style.display = 'flex'; }
 function closeAbbrModal()   { store.closeModal(); document.getElementById('abbr-modal').style.display = 'none'; }
+function openSettingsModal()  { store.openModal(); document.getElementById('settings-modal').style.display = 'flex'; }
+function closeSettingsModal() { store.closeModal(); document.getElementById('settings-modal').style.display = 'none'; }
 
 function openMonthlyModal() {
     store.openModal();
@@ -1311,6 +1313,18 @@ function initEventDelegation() {
     const habitContainer = document.getElementById('habit-container');
     habitContainer.addEventListener('change', handleHabitChange);
     habitContainer.addEventListener('input',  handleHabitInput);
+
+    // Scroll on drag: lăn chuột khi đang giữ task
+    let _wheelRafId = null;
+    document.addEventListener('wheel', (e) => {
+        if (!store.draggedTask) return;
+        e.preventDefault();
+        if (_wheelRafId) return;
+        _wheelRafId = requestAnimationFrame(() => {
+            window.scrollBy({ left: e.deltaX, top: e.deltaY, behavior: 'auto' });
+            _wheelRafId = null;
+        });
+    }, { passive: false });
 }
 
 function handleDocumentClick(e) {
@@ -1328,11 +1342,12 @@ function handleTopNavClick(e) {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const a = btn.dataset.action;
-    if (a === 'open-monthly')      openMonthlyModal();
+    if (a === 'open-monthly')           openMonthlyModal();
     else if (a === 'open-month-picker') openMonthPickerModal();
-    else if (a === 'logout')       handleLogout();
-    else if (a === 'open-notes')   openNoteModal();
-    else if (a === 'open-abbr')    openAbbrModal();
+    else if (a === 'logout')            handleLogout();
+    else if (a === 'open-notes')        openNoteModal();
+    else if (a === 'open-abbr')         openAbbrModal();
+    else if (a === 'open-settings')     openSettingsModal();
 }
 function handlePriorityMenuClick(e) {
     const item = e.target.closest('[data-priority]');
@@ -1344,10 +1359,11 @@ function handleModalCloseClick(e) {
     const btn = e.target.closest('[data-close]');
     if (!btn) return;
     const id = btn.dataset.close;
-    if (id === 'note-modal')         closeNoteModal();
-    else if (id === 'abbr-modal')    closeAbbrModal();
-    else if (id === 'monthly-modal') closeMonthlyModal();
+    if (id === 'note-modal')              closeNoteModal();
+    else if (id === 'abbr-modal')         closeAbbrModal();
+    else if (id === 'monthly-modal')      closeMonthlyModal();
     else if (id === 'month-picker-modal') closeMonthPickerModal();
+    else if (id === 'settings-modal')     closeSettingsModal();
 }
 function handleMainGridContextMenu(e) {
     const cb = e.target.closest('input[type="checkbox"]');
