@@ -400,7 +400,11 @@ function getMonthWeeks() {
 // ============================================================
 // 8. INIT & LIFECYCLE
 // ============================================================
-window.onload = checkAuth;
+window.onload = () => {
+    // Gán auth listener ngay khi trang load, không chờ login xong
+    document.getElementById('auth-overlay').addEventListener('click', handleAuthClick);
+    checkAuth();
+};
 
 function continueInit() {
     calculateWeekIds();
@@ -1293,8 +1297,10 @@ document.addEventListener('mousemove', e => {
 function initEventDelegation() {
     document.addEventListener('click',       handleDocumentClick);
     document.addEventListener('contextmenu', handleDocumentContextMenu);
-    document.getElementById('auth-overlay').addEventListener('click', handleAuthClick);
-    document.addEventListener('click', (e) => { if (e.target.closest('[data-action]')) handleTopNavClick(e); });
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#auth-overlay')) return;
+        if (e.target.closest('[data-action]')) handleTopNavClick(e);
+    });
     document.getElementById('priority-menu').addEventListener('click', handlePriorityMenuClick);
     document.body.addEventListener('click', handleModalCloseClick);
     document.addEventListener('change', handleNotesChange);
