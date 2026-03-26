@@ -830,8 +830,8 @@ function showContextMenu(e, dIdx, tIdx) {
     e.preventDefault();
     const menu = document.getElementById('priority-menu');
     menu.style.display = 'block';
-    menu.style.left = (e.pageX / 1.1) + 'px';
-    menu.style.top  = (e.pageY / 1.1) + 'px';
+    menu.style.left = (e.clientX + window.scrollX) + 'px';
+    menu.style.top  = (e.clientY + window.scrollY) + 'px';
     store.setRightClick(dIdx, tIdx);
 }
 
@@ -1410,6 +1410,67 @@ function initEventDelegation() {
     });
 
     document.addEventListener('dragend', _stopDragScroll);
+
+    // Touch drag & drop fallback for mobile
+    let _touchDragInfo = null;
+    let _touchClone    = null;
+
+    mainGrid.addEventListener('touchstart', (e) => {
+        const dragZone = e.target.closest('.task-drag-zone');
+        if (!dragZone) return;
+        const taskItem = dragZone.closest('.task-item');
+        if (!taskItem) return;
+        const parts = taskItem.id.split('_');
+        const dIdx = parseInt(parts[2]); const tIdx = parseInt(parts[3]);
+        const nameEl = document.getElementById(`t_name_${dIdx}_${tIdx}`);
+        if (!nameEl || !nameEl.value.trim()) return;
+
+        store.draggedTask = { dIdx, tIdx };
+        _touchDragInfo = { dIdx, tIdx, taskItem };
+
+        const rect = taskItem.getBoundingClientRect();
+        _touchClone = taskItem.cloneNode(true);
+        _touchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:0.75;pointer-events:none;z-index:9999;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2);`;
+        document.body.appendChild(_touchClone);
+        taskItem.style.opacity = '0.3';
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!_touchDragInfo || !_touchClone) return;
+        const touch = e.touches[0];
+        const W = window.innerWidth; const H = window.innerHeight;
+        _touchClone.style.left = (touch.clientX - 40) + 'px';
+        _touchClone.style.top  = (touch.clientY - 20) + 'px';
+        // Edge scroll
+        if (touch.clientY < SCROLL_ZONE) window.scrollBy(0, -SCROLL_SPEED);
+        else if (touch.clientY > H - SCROLL_ZONE) window.scrollBy(0, SCROLL_SPEED);
+        if (touch.clientX < SCROLL_ZONE) window.scrollBy(-SCROLL_SPEED, 0);
+        else if (touch.clientX > W - SCROLL_ZONE) window.scrollBy(SCROLL_SPEED, 0);
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+        if (!_touchDragInfo || !_touchClone) return;
+        const touch = e.changedTouches[0];
+        _touchClone.remove(); _touchClone = null;
+        _touchDragInfo.taskItem.style.opacity = '';
+
+        const dropEl = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (dropEl) {
+            const targetTaskItem = dropEl.closest('.task-item');
+            const targetTaskList = dropEl.closest('.task-list');
+            if (targetTaskItem) {
+                const parts = targetTaskItem.id.split('_');
+                dropOnTaskItem(e, parseInt(parts[2]), parseInt(parts[3]));
+            } else if (targetTaskList) {
+                dropTask(e, parseInt(targetTaskList.id.replace('task_list_', '')));
+            } else {
+                store.draggedTask = null;
+            }
+        } else {
+            store.draggedTask = null;
+        }
+        _touchDragInfo = null;
+    }, { passive: true });
 }
 
 function handleDocumentClick(e) {

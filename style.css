@@ -144,6 +144,7 @@ body {
     background: rgba(255, 255, 255, 0.8); border: 2px solid var(--border-heavy);
     color: var(--text-main); padding: 10px 20px; border-radius: 20px; font-weight: 700;
     font-size: 13px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+    min-height: 44px; touch-action: manipulation;
 }
 .nav-btn:hover { background: #fff; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
 .nav-btn--danger { background: rgba(211, 47, 47, 0.1); border-color: #D32F2F; color: #D32F2F; z-index: 2; }
