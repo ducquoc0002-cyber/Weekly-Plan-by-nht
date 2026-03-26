@@ -1375,17 +1375,41 @@ function initEventDelegation() {
         saveGlobalData();
     });
 
-    // Scroll on drag: lăn chuột khi đang giữ task
-    let _wheelRafId = null;
-    document.addEventListener('wheel', (e) => {
+    // Auto-scroll khi drag gần mép màn hình
+    // (HTML5 DnD API suppress wheel events trong khi drag — dùng dragover thay thế)
+    const SCROLL_ZONE = 80;   // px từ mép để kích hoạt scroll
+    const SCROLL_SPEED = 12;  // px mỗi frame
+    let _dragScrollRaf = null;
+
+    function _dragAutoScroll(e) {
+        if (!store.draggedTask) { _stopDragScroll(); return; }
+        const { clientX, clientY } = e;
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        let dx = 0, dy = 0;
+        if (clientX < SCROLL_ZONE)       dx = -SCROLL_SPEED * (1 - clientX / SCROLL_ZONE);
+        else if (clientX > W - SCROLL_ZONE) dx =  SCROLL_SPEED * (1 - (W - clientX) / SCROLL_ZONE);
+        if (clientY < SCROLL_ZONE)       dy = -SCROLL_SPEED * (1 - clientY / SCROLL_ZONE);
+        else if (clientY > H - SCROLL_ZONE) dy =  SCROLL_SPEED * (1 - (H - clientY) / SCROLL_ZONE);
+        if (dx !== 0 || dy !== 0) {
+            window.scrollBy(dx, dy);
+            _dragScrollRaf = requestAnimationFrame(() => _dragAutoScroll(e));
+        } else {
+            _stopDragScroll();
+        }
+    }
+
+    function _stopDragScroll() {
+        if (_dragScrollRaf) { cancelAnimationFrame(_dragScrollRaf); _dragScrollRaf = null; }
+    }
+
+    document.addEventListener('dragover', (e) => {
         if (!store.draggedTask) return;
-        e.preventDefault();
-        if (_wheelRafId) return;
-        _wheelRafId = requestAnimationFrame(() => {
-            window.scrollBy({ left: e.deltaX, top: e.deltaY, behavior: 'auto' });
-            _wheelRafId = null;
-        });
-    }, { passive: false });
+        _stopDragScroll();
+        _dragAutoScroll(e);
+    });
+
+    document.addEventListener('dragend', _stopDragScroll);
 }
 
 function handleDocumentClick(e) {
