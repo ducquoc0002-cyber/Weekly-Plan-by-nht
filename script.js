@@ -1113,29 +1113,22 @@ function loadMonthlyData() {
     document.getElementById('monthly-pie-chart').innerHTML  = '';
     document.getElementById('modal-weekly-cols').innerHTML  = '';
 
-    // Lấy dữ liệu theo tháng đang xem; migration: nếu dữ liệu cũ là flat thì dùng làm fallback
+    // Lấy dữ liệu theo tháng đang xem
     store.appData.monthly = store.appData.monthly || {};
-    const monthId = store.viewingMonthId;
-    let mData = store.appData.monthly[monthId];
 
-    // Migration: dữ liệu cũ lưu flat (mg_1, gr_name_1...) — migrate sang keyed format
-    if (!mData) {
-        const legacy = store.appData.monthly;
-        if (legacy['mg_1'] !== undefined) {
-            // Lưu dữ liệu cũ vào tháng hiện tại rồi xóa flat keys
-            const migratedMonth = {};
-            for (let i = 1; i <= 3; i++) {
-                ['mg', 'gr_name', 'gr_target', 'gr_actual', 'gr_status'].forEach(k => {
-                    const key = `${k}_${i}`;
-                    if (legacy[key] !== undefined) { migratedMonth[key] = legacy[key]; delete legacy[key]; }
-                });
-            }
-            store.appData.monthly[monthId] = migratedMonth;
-            mData = migratedMonth;
-        } else {
-            mData = {};
+    // Cleanup: xóa flat keys cũ (mg_1, gr_name_1...) nếu còn tồn tại — không migrate vì không biết thuộc tháng nào
+    const legacy = store.appData.monthly;
+    if (legacy['mg_1'] !== undefined) {
+        for (let i = 1; i <= 3; i++) {
+            ['mg', 'gr_name', 'gr_target', 'gr_actual', 'gr_status'].forEach(k => {
+                delete legacy[`${k}_${i}`];
+            });
         }
+        saveGlobalData();
     }
+
+    const monthId = store.viewingMonthId;
+    const mData = store.appData.monthly[monthId] || {};
 
     try {
         for (let i = 1; i <= 3; i++) {
