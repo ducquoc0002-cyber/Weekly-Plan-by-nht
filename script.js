@@ -140,6 +140,14 @@ function _stateSetTask(d, t, field, value) {
     store.state.tasks[`t_${field}_${d}_${t}`] = value;
 }
 
+/** Capitalize chữ đầu tiên của input, giữ nguyên cursor position */
+function _capitalizeFirstLetter(el) {
+    if (!el.value || el.value[0] === el.value[0].toUpperCase()) return;
+    const pos = el.selectionStart;
+    el.value = el.value.charAt(0).toUpperCase() + el.value.slice(1);
+    el.setSelectionRange(pos, pos);
+}
+
 function _syncStateFromDOM() {
     store.resetState();
     const s = store.state;
@@ -1391,6 +1399,10 @@ function initEventDelegation() {
 
     const mainGrid = document.getElementById('main-grid');
     mainGrid.addEventListener('change',      handleMainGridChange);
+    mainGrid.addEventListener('input', (e) => {
+        if (!e.target.classList.contains('t-name')) return;
+        _capitalizeFirstLetter(e.target);
+    });
     mainGrid.addEventListener('contextmenu', handleMainGridContextMenu);
     mainGrid.addEventListener('dragstart',   handleMainGridDragStart);
     mainGrid.addEventListener('dragover',    handleMainGridDragOver);
