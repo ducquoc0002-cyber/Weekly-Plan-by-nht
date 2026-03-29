@@ -1116,12 +1116,19 @@ function loadMonthlyData() {
     // Lấy dữ liệu theo tháng đang xem
     store.appData.monthly = store.appData.monthly || {};
 
-    // Cleanup: xóa flat keys cũ (mg_1, gr_name_1...) nếu còn tồn tại — không migrate vì không biết thuộc tháng nào
-    const legacy = store.appData.monthly;
-    if (legacy['mg_1'] !== undefined) {
+    // Migration một lần: nếu còn flat keys cũ (mg_1...), migrate vào tháng hiện tại đang xem
+    // Flat keys tồn tại nghĩa là dữ liệu được lưu trước khi có per-month format
+    const monthly = store.appData.monthly;
+    if (monthly['mg_1'] !== undefined || monthly['gr_name_1'] !== undefined) {
+        const currentMonthForMigration = store.viewingMonthId;
+        monthly[currentMonthForMigration] = monthly[currentMonthForMigration] || {};
         for (let i = 1; i <= 3; i++) {
             ['mg', 'gr_name', 'gr_target', 'gr_actual', 'gr_status'].forEach(k => {
-                delete legacy[`${k}_${i}`];
+                const key = `${k}_${i}`;
+                if (monthly[key] !== undefined) {
+                    monthly[currentMonthForMigration][key] = monthly[key];
+                    delete monthly[key];
+                }
             });
         }
         saveGlobalData();
