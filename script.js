@@ -1249,8 +1249,8 @@ function switchToWeek(targetWeekId) {
 
 function openMonthPickerModal() {
     store.openModal();
-    const vp = store.viewingWeekId.split('-');
-    store.viewingMonthId = `${vp[0]}-${vp[1]}`;
+    // Không tính lại viewingMonthId từ viewingWeekId — tuần đầu tháng có thể bắt đầu từ Monday tháng trước
+    // viewingMonthId đã được set đúng bởi switchToMonth hoặc calculateWeekIds
     renderMonthPickerGrid();
     document.getElementById('month-picker-modal').style.display = 'flex';
 }
