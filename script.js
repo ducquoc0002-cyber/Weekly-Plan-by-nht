@@ -66,7 +66,7 @@ const store = (() => {
         set appData(v)         { _appData = v; },
         // _state (in-memory DOM mirror)
         get state()            { return _state; },
-        resetState()           { _state = { tasks: {}, habits: {}, notes: {} }; },
+        resetState()           { const prev = _state; _state = { tasks: {}, habits: {}, notes: {}, notesCount: prev?.notesCount || 10 }; },
         // week/month IDs
         get currentRealWeekId()     { return _currentRealWeekId; },
         set currentRealWeekId(v)    { _currentRealWeekId = v; },
@@ -169,7 +169,7 @@ function _syncStateFromDOM() {
             s.habits[`h_check_${h}_${d}`] = (document.getElementById(`h_check_${h}_${d}`) || {}).checked || false;
         }
     }
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= (store.state.notesCount || 10); i++) {
         const el = document.getElementById(`note_input_${i}`);
         s.notes[`note_${i}`] = el ? el.value : '';
     }
@@ -288,9 +288,10 @@ function saveData() {
     _syncStateFromDOM();
     const s = store.state;
     store.appData.weeks[store.viewingWeekId] = {
-        tasks:  Object.assign({}, s.tasks),
-        habits: Object.assign({}, s.habits),
-        notes:  Object.assign({}, s.notes)
+        tasks:      Object.assign({}, s.tasks),
+        habits:     Object.assign({}, s.habits),
+        notes:      Object.assign({}, s.notes),
+        notesCount: s.notesCount || 10
     };
     saveGlobalData();
 }
@@ -318,7 +319,13 @@ function loadWeekData() {
             document.getElementById(`h_check_${h}_${d}`).checked = wData.habits[`h_check_${h}_${d}`] || false;
         }
     }
-    for (let i = 1; i <= 10; i++) {
+    // Restore notes count from saved data, then re-init UI if needed
+    const targetCount = Math.max(10, wData.notesCount || 10);
+    if (store.state.notesCount !== targetCount) {
+        store.state.notesCount = targetCount;
+        initNotesUI();
+    }
+    for (let i = 1; i <= targetCount; i++) {
         const el = document.getElementById(`note_input_${i}`);
         if (el) el.value = wData.notes?.[`note_${i}`] || '';
     }
@@ -342,9 +349,12 @@ function saveMonthly() {
 
 function saveAbbrData() {
     store.appData.abbrs = store.appData.abbrs || {};
-    for (let i = 1; i <= 10; i++) {
-        store.appData.abbrs[`abbr_k_${i}`] = document.getElementById(`abbr_k_${i}`).value.trim();
-        store.appData.abbrs[`abbr_v_${i}`] = document.getElementById(`abbr_v_${i}`).value.trim();
+    const count = store.appData.abbrsCount || 10;
+    for (let i = 1; i <= count; i++) {
+        const kEl = document.getElementById(`abbr_k_${i}`);
+        const vEl = document.getElementById(`abbr_v_${i}`);
+        if (kEl) store.appData.abbrs[`abbr_k_${i}`] = kEl.value.trim();
+        if (vEl) store.appData.abbrs[`abbr_v_${i}`] = vEl.value.trim();
     }
     saveGlobalData();
 }
@@ -461,6 +471,7 @@ function _applyPersistentData(targetWeekId) {
         const dst = store.appData.weeks[targetWeekId];
         if (s.persistentNotes && src.notes) {
             dst.notes = JSON.parse(JSON.stringify(src.notes));
+            dst.notesCount = src.notesCount || 10;
         }
         if (s.persistentAbbr && store.appData.abbrs) {
             // abbrs là global, không cần copy per-week
@@ -517,48 +528,106 @@ function renameUser(e) {
 // ============================================================
 // 9. DOM RENDERING (DocumentFragment)
 // ============================================================
+function _createNoteRow(i) {
+    const row   = document.createElement('div');
+    row.className = 'note-row';
+    const label = document.createElement('label');
+    label.textContent = `${i}.`;
+    const input = document.createElement('input');
+    input.type  = 'text';
+    input.id    = `note_input_${i}`;
+    input.placeholder = '...';
+    row.appendChild(label);
+    row.appendChild(input);
+    return row;
+}
+
 function initNotesUI() {
     const container = document.getElementById('notes-container');
     container.innerHTML = '';
+    const count = store.state.notesCount || 10;
     const fragment = document.createDocumentFragment();
-    for (let i = 1; i <= 10; i++) {
-        const row   = document.createElement('div');
-        row.className = 'note-row';
-        const label = document.createElement('label');
-        label.textContent = `${i}.`;
-        const input = document.createElement('input');
-        input.type  = 'text';
-        input.id    = `note_input_${i}`;
-        input.placeholder = '...';
-        row.appendChild(label);
-        row.appendChild(input);
-        fragment.appendChild(row);
+    for (let i = 1; i <= count; i++) {
+        fragment.appendChild(_createNoteRow(i));
     }
+    // Add "+" button row
+    const addRow = document.createElement('div');
+    addRow.className = 'note-add-row';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'note-add-btn';
+    addBtn.textContent = '+';
+    addBtn.title = 'Thêm dòng ghi chú';
+    addBtn.addEventListener('click', addNoteRow);
+    addRow.appendChild(addBtn);
+    fragment.appendChild(addRow);
     container.appendChild(fragment);
+}
+
+function addNoteRow() {
+    const container = document.getElementById('notes-container');
+    const addRow = container.querySelector('.note-add-row');
+    const currentCount = container.querySelectorAll('.note-row').length;
+    const newIdx = currentCount + 1;
+    store.state.notesCount = newIdx;
+    const row = _createNoteRow(newIdx);
+    container.insertBefore(row, addRow);
+    container.scrollTop = container.scrollHeight;
+    document.getElementById(`note_input_${newIdx}`).focus();
+    saveData(); // persist notesCount immediately
+}
+
+function _createAbbrRow(i) {
+    const row    = document.createElement('div');
+    row.className = 'abbr-row';
+    const kInput = document.createElement('input');
+    kInput.type  = 'text';
+    kInput.id    = `abbr_k_${i}`;
+    kInput.placeholder = 'Viết tắt';
+    const vInput = document.createElement('input');
+    vInput.type  = 'text';
+    vInput.id    = `abbr_v_${i}`;
+    vInput.placeholder = 'Nghĩa';
+    row.appendChild(kInput);
+    row.appendChild(vInput);
+    return row;
 }
 
 function initAbbrUI() {
     const container = document.getElementById('abbr-container');
     container.innerHTML = '';
+    const count = store.appData.abbrsCount || 10;
     const fragment = document.createDocumentFragment();
-    for (let i = 1; i <= 10; i++) {
-        const row    = document.createElement('div');
-        row.className = 'abbr-row';
-        const kInput = document.createElement('input');
-        kInput.type  = 'text';
-        kInput.id    = `abbr_k_${i}`;
-        const vInput = document.createElement('input');
-        vInput.type  = 'text';
-        vInput.id    = `abbr_v_${i}`;
-        row.appendChild(kInput);
-        row.appendChild(vInput);
-        fragment.appendChild(row);
+    for (let i = 1; i <= count; i++) {
+        fragment.appendChild(_createAbbrRow(i));
     }
+    // Add "+" button row
+    const addRow = document.createElement('div');
+    addRow.className = 'abbr-add-row';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'abbr-add-btn';
+    addBtn.textContent = '+';
+    addBtn.title = 'Thêm từ viết tắt';
+    addBtn.addEventListener('click', addAbbrRow);
+    addRow.appendChild(addBtn);
+    fragment.appendChild(addRow);
     container.appendChild(fragment);
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= count; i++) {
         document.getElementById(`abbr_k_${i}`).value = store.appData.abbrs?.[`abbr_k_${i}`] || '';
         document.getElementById(`abbr_v_${i}`).value = store.appData.abbrs?.[`abbr_v_${i}`] || '';
     }
+}
+
+function addAbbrRow() {
+    const container = document.getElementById('abbr-container');
+    const addRow = container.querySelector('.abbr-add-row');
+    const currentCount = container.querySelectorAll('.abbr-row').length;
+    const newIdx = currentCount + 1;
+    store.appData.abbrsCount = newIdx;
+    const row = _createAbbrRow(newIdx);
+    container.insertBefore(row, addRow);
+    container.scrollTop = container.scrollHeight;
+    document.getElementById(`abbr_k_${newIdx}`).focus();
+    saveGlobalData();
 }
 
 function renderCalendar() {
@@ -1364,7 +1433,8 @@ document.addEventListener('mousemove', e => {
         const text = target.value;
         if (!text) { tooltip.style.display = 'none'; return; }
         const foundAbbrs = [];
-        for (let i = 1; i <= 10; i++) {
+        const abbrCount = store.appData.abbrsCount || 10;
+        for (let i = 1; i <= abbrCount; i++) {
             const k = store.appData.abbrs?.[`abbr_k_${i}`];
             const v = store.appData.abbrs?.[`abbr_v_${i}`];
             const safeK = k ? k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
@@ -1658,6 +1728,8 @@ window.saveData     = saveData;
 window.loadWeekData = loadWeekData;
 window.calculateWeekIds = calculateWeekIds;
 window.openNoteModal    = openNoteModal;
+window.addNoteRow       = addNoteRow;
+window.addAbbrRow       = addAbbrRow;
 window.closeNoteModal   = closeNoteModal;
 window.openAbbrModal    = openAbbrModal;
 window.closeAbbrModal   = closeAbbrModal;
