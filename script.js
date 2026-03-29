@@ -1095,9 +1095,13 @@ function closeSettingsModal() { store.closeModal(); document.getElementById('set
 
 function openMonthlyModal() {
     store.openModal();
-    const parts = store.viewingWeekId.split('-');
-    const vDate = new Date(parts[0], parts[1] - 1, parts[2]);
-    store.viewingMonthId = `${vDate.getFullYear()}-${String(vDate.getMonth() + 1).padStart(2, '0')}`;
+    // Dùng viewingMonthId trực tiếp — không tính lại từ viewingWeekId
+    // vì tuần đầu tháng có thể bắt đầu từ Monday của tháng trước
+    if (!store.viewingMonthId) {
+        const parts = store.viewingWeekId.split('-');
+        const vDate = new Date(parts[0], parts[1] - 1, parts[2]);
+        store.viewingMonthId = `${vDate.getFullYear()}-${String(vDate.getMonth() + 1).padStart(2, '0')}`;
+    }
     document.getElementById('monthly-modal').style.display = 'flex';
     loadMonthlyData();
 }
