@@ -319,12 +319,15 @@ function loadWeekData() {
 
 function saveMonthly() {
     store.appData.monthly = store.appData.monthly || {};
+    const monthId = store.viewingMonthId;
+    store.appData.monthly[monthId] = store.appData.monthly[monthId] || {};
+    const mMonth = store.appData.monthly[monthId];
     for (let i = 1; i <= 3; i++) {
-        store.appData.monthly[`mg_${i}`]       = document.getElementById(`mg-${i}`).value;
-        store.appData.monthly[`gr_name_${i}`]  = document.getElementById(`gr-name-${i}`).value;
-        store.appData.monthly[`gr_target_${i}`]= document.getElementById(`gr-target-${i}`).value;
-        store.appData.monthly[`gr_actual_${i}`]= document.getElementById(`gr-actual-${i}`).value;
-        store.appData.monthly[`gr_status_${i}`]= document.getElementById(`gr-status-${i}`).value;
+        mMonth[`mg_${i}`]        = document.getElementById(`mg-${i}`).value;
+        mMonth[`gr_name_${i}`]   = document.getElementById(`gr-name-${i}`).value;
+        mMonth[`gr_target_${i}`] = document.getElementById(`gr-target-${i}`).value;
+        mMonth[`gr_actual_${i}`] = document.getElementById(`gr-actual-${i}`).value;
+        mMonth[`gr_status_${i}`] = document.getElementById(`gr-status-${i}`).value;
     }
     saveGlobalData();
 }
@@ -1109,14 +1112,42 @@ function loadMonthlyData() {
     document.getElementById('monthly-bar-chart').innerHTML  = '';
     document.getElementById('monthly-pie-chart').innerHTML  = '';
     document.getElementById('modal-weekly-cols').innerHTML  = '';
-    const mData = store.appData.monthly || {};
-    for (let i = 1; i <= 3; i++) {
-        document.getElementById(`mg-${i}`).value        = mData[`mg_${i}`]       || '';
-        document.getElementById(`gr-name-${i}`).value   = mData[`gr_name_${i}`]  || '';
-        document.getElementById(`gr-target-${i}`).value = mData[`gr_target_${i}`]|| '';
-        document.getElementById(`gr-actual-${i}`).value = mData[`gr_actual_${i}`]|| '';
-        document.getElementById(`gr-status-${i}`).value = mData[`gr_status_${i}`]|| 'Pending';
-        updateRowStatus(i);
+
+    // Lấy dữ liệu theo tháng đang xem; migration: nếu dữ liệu cũ là flat thì dùng làm fallback
+    store.appData.monthly = store.appData.monthly || {};
+    const monthId = store.viewingMonthId;
+    let mData = store.appData.monthly[monthId];
+
+    // Migration: dữ liệu cũ lưu flat (mg_1, gr_name_1...) — migrate sang keyed format
+    if (!mData) {
+        const legacy = store.appData.monthly;
+        if (legacy['mg_1'] !== undefined) {
+            // Lưu dữ liệu cũ vào tháng hiện tại rồi xóa flat keys
+            const migratedMonth = {};
+            for (let i = 1; i <= 3; i++) {
+                ['mg', 'gr_name', 'gr_target', 'gr_actual', 'gr_status'].forEach(k => {
+                    const key = `${k}_${i}`;
+                    if (legacy[key] !== undefined) { migratedMonth[key] = legacy[key]; delete legacy[key]; }
+                });
+            }
+            store.appData.monthly[monthId] = migratedMonth;
+            mData = migratedMonth;
+        } else {
+            mData = {};
+        }
+    }
+
+    try {
+        for (let i = 1; i <= 3; i++) {
+            document.getElementById(`mg-${i}`).value        = mData[`mg_${i}`]        || '';
+            document.getElementById(`gr-name-${i}`).value   = mData[`gr_name_${i}`]   || '';
+            document.getElementById(`gr-target-${i}`).value = mData[`gr_target_${i}`] || '';
+            document.getElementById(`gr-actual-${i}`).value = mData[`gr_actual_${i}`] || '';
+            document.getElementById(`gr-status-${i}`).value = mData[`gr_status_${i}`] || 'Pending';
+            updateRowStatus(i);
+        }
+    } catch (err) {
+        console.warn('[loadMonthlyData] Goals render error:', err);
     }
 
     const weekBlocks    = getMonthWeeks();
@@ -1286,6 +1317,11 @@ function switchToMonth(monthId) {
     closeMonthPickerModal();
     generateWeekDates(store.viewingWeekId);
     rebuildUI();
+    // Nếu Monthly Summary modal đang mở, reload dữ liệu theo tháng mới
+    const monthlyModal = document.getElementById('monthly-modal');
+    if (monthlyModal && monthlyModal.style.display === 'flex') {
+        loadMonthlyData();
+    }
 }
 
 
