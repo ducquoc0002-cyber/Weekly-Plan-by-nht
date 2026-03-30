@@ -319,12 +319,9 @@ function loadWeekData() {
             document.getElementById(`h_check_${h}_${d}`).checked = wData.habits[`h_check_${h}_${d}`] || false;
         }
     }
-    // Restore notes count from saved data, then re-init UI if needed
+    // Sync notes count from saved data into state, then populate values
     const targetCount = Math.max(10, wData.notesCount || 10);
-    if (store.state.notesCount !== targetCount) {
-        store.state.notesCount = targetCount;
-        initNotesUI();
-    }
+    store.state.notesCount = targetCount;
     for (let i = 1; i <= targetCount; i++) {
         const el = document.getElementById(`note_input_${i}`);
         if (el) el.value = wData.notes?.[`note_${i}`] || '';
@@ -432,6 +429,7 @@ function continueInit() {
     store.viewingWeekId = store.currentRealWeekId;
     if (!store.appData.weeks[store.viewingWeekId]) {
         store.appData.weeks[store.viewingWeekId] = { tasks: {}, habits: {}, notes: {} };
+        _applyPersistentData(store.viewingWeekId);
     }
     const savedName = localStorage.getItem('dashboard_username') || 'Name';
     document.getElementById('greeting-text').innerText = `Hi ${savedName} !!`;
@@ -492,6 +490,10 @@ function _applyPersistentData(targetWeekId) {
 function rebuildUI() {
     document.getElementById('main-grid').querySelectorAll('.grid-item:nth-child(n+3)').forEach(e => e.remove());
     renderDays();
+    // Sync notesCount from new week's data before rebuilding notes UI
+    const wData = store.appData.weeks[store.viewingWeekId] || {};
+    store.state.notesCount = Math.max(10, wData.notesCount || 10);
+    initNotesUI();
     loadWeekData();
     updateAll();
 }
