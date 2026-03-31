@@ -1893,6 +1893,7 @@ function handleModalCloseClick(e) {
 function handleMainGridContextMenu(e) {
     const cb = e.target.closest('input[type="checkbox"]');
     if (!cb) return;
+    e.preventDefault(); // chặn browser context menu
     const taskItem = cb.closest('.task-item');
     if (!taskItem) return;
     const parts = taskItem.id.split('_');
