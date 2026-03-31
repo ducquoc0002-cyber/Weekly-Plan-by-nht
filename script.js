@@ -56,6 +56,7 @@ const store = (() => {
     let _currentRightClickDay  = null;
     let _currentRightClickTask = null;
     let _draggedTaskInfo  = null;
+    let _moveTaskSource   = null; // { dIdx, tIdx } — task đang chờ được move
 
     return {
         // currentUser
@@ -97,6 +98,9 @@ const store = (() => {
         // drag info
         get draggedTask()      { return _draggedTaskInfo; },
         set draggedTask(v)     { _draggedTaskInfo = v; },
+        // move task source
+        get moveTaskSource()   { return _moveTaskSource; },
+        set moveTaskSource(v)  { _moveTaskSource = v; },
     };
 })();
 
@@ -713,6 +717,7 @@ function createTaskElement(dIdx, tIdx) {
     dragZone.className = 'task-drag-zone'; dragZone.draggable = true; dragZone.title = 'Drag to move';
     const starIcon = document.createElement('div'); starIcon.className = 'task-star-icon'; starIcon.textContent = '⭐';
     const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = `t_check_${dIdx}_${tIdx}`;
+    checkbox.className = 'task-check-trigger';
     dragZone.appendChild(starIcon); dragZone.appendChild(checkbox);
 
     const inputContainer = document.createElement('div'); inputContainer.className = 'task-input-container';
@@ -926,12 +931,14 @@ function handleTimeNavigation(e, dIdx, tIdx, currentIdx) {
 }
 
 function showContextMenu(e, dIdx, tIdx) {
-    e.preventDefault();
-    const menu = document.getElementById('priority-menu');
+    // Hiện task-action-menu (Mark / Move Task)
+    const menu = document.getElementById('task-action-menu');
     menu.style.display = 'block';
     menu.style.left = (e.clientX + window.scrollX) + 'px';
     menu.style.top  = (e.clientY + window.scrollY) + 'px';
     store.setRightClick(dIdx, tIdx);
+    // Ẩn priority-menu nếu đang hiện
+    document.getElementById('priority-menu').style.display = 'none';
 }
 
 function setPriority(level) {
@@ -1180,7 +1187,212 @@ function drawPieChart(container, habitStats) {
 
 
 // ============================================================
-// 13. MODAL LOGIC
+// 13. MOVE TASK FEATURE
+// ============================================================
+
+/** Mở Move Task modal với picker tháng */
+function openMoveTaskModal(dIdx, tIdx) {
+    store.moveTaskSource = { dIdx, tIdx };
+    store.openModal();
+    const taskName = store.state.tasks[`t_name_${dIdx}_${tIdx}`] || '(task)';
+    document.getElementById('move-task-subtitle').textContent =
+        `Moving: "${taskName}" — Select a month, then a week, then a day.`;
+    _renderMoveTaskBody(null, null);
+    document.getElementById('move-task-modal').style.display = 'flex';
+}
+
+function closeMoveTaskModal() {
+    store.closeModal();
+    store.moveTaskSource = null;
+    document.getElementById('move-task-modal').style.display = 'none';
+}
+
+/** Render toàn bộ body của move-task modal */
+function _renderMoveTaskBody(selectedMonthId, selectedWeekId) {
+    const body = document.getElementById('move-task-body');
+    body.innerHTML = '';
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIdx = now.getMonth();
+    const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+    // --- Section: months ---
+    const monthSection = document.createElement('div');
+    monthSection.className = 'move-task-section';
+    const monthLabel = document.createElement('div');
+    monthLabel.className = 'move-task-section-label';
+    monthLabel.textContent = 'Select Month';
+    monthSection.appendChild(monthLabel);
+
+    const monthGrid = document.createElement('div');
+    monthGrid.className = 'move-task-months';
+
+    for (let mIdx = 0; mIdx < 12; mIdx++) {
+        const mId = `${currentYear}-${String(mIdx + 1).padStart(2, '0')}`;
+        const cell = document.createElement('div');
+        let cls = 'move-task-month-cell';
+        if (mIdx === currentMonthIdx) cls += ' move-task-month-cell--current';
+        if (selectedMonthId === mId) cls += ' move-task-month-cell--active';
+        cell.className = cls;
+        cell.dataset.monthId = mId;
+        cell.innerHTML = `${monthNames[mIdx]}<br><span style="font-size:10px;font-weight:600;opacity:0.7;">${currentYear}</span>`;
+        cell.addEventListener('click', () => _renderMoveTaskBody(mId, null));
+        monthGrid.appendChild(cell);
+    }
+    monthSection.appendChild(monthGrid);
+    body.appendChild(monthSection);
+
+    if (!selectedMonthId) return;
+
+    // --- Section: weeks ---
+    const [y, m] = selectedMonthId.split('-').map(Number);
+    const firstOfMonth = new Date(y, m - 1, 1);
+    const fullMonthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+    const weeksSection = document.createElement('div');
+    weeksSection.className = 'move-task-section';
+    const weekLabel = document.createElement('div');
+    weekLabel.className = 'move-task-section-label';
+    weekLabel.textContent = `Weeks in ${fullMonthNames[m - 1]} ${y}`;
+    weeksSection.appendChild(weekLabel);
+
+    const weekGrid = document.createElement('div');
+    weekGrid.className = 'move-task-weeks';
+
+    const fmt = d => `${d.getDate()}/${d.getMonth() + 1}`;
+    let monday = getMonday(firstOfMonth);
+    for (let i = 0; i < 5; i++) {
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        const wId = formatDateKey(monday);
+        const label = `${fmt(monday)}–${fmt(sunday)}`;
+        const hasData = !!store.appData.weeks[wId];
+
+        const cell = document.createElement('div');
+        let cls = 'move-task-week-cell';
+        if (!hasData) cls += ' move-task-week-cell--empty';
+        if (selectedWeekId === wId) cls += ' move-task-week-cell--active';
+        cell.className = cls;
+        cell.dataset.weekId = wId;
+        cell.innerHTML = `W${i + 1}<br><span style="font-size:10px;font-weight:600;opacity:0.8;">${label}</span>`;
+        cell.addEventListener('click', () => _renderMoveTaskBody(selectedMonthId, wId));
+        weekGrid.appendChild(cell);
+
+        monday = new Date(monday);
+        monday.setDate(monday.getDate() + 7);
+    }
+    weeksSection.appendChild(weekGrid);
+    body.appendChild(weeksSection);
+
+    if (!selectedWeekId) return;
+
+    // --- Section: days ---
+    const daysSection = document.createElement('div');
+    daysSection.className = 'move-task-section';
+    const daysLabel = document.createElement('div');
+    daysLabel.className = 'move-task-section-label';
+    daysLabel.textContent = 'Select Day';
+    daysSection.appendChild(daysLabel);
+
+    const daysGrid = document.createElement('div');
+    daysGrid.className = 'move-task-days';
+
+    const wParts = selectedWeekId.split('-');
+    const wMonday = new Date(wParts[0], wParts[1] - 1, wParts[2]);
+    const wData = store.appData.weeks[selectedWeekId] || { tasks: {} };
+
+    DAYS_DATA.forEach((dayObj, dIdx) => {
+        const date = new Date(wMonday);
+        date.setDate(wMonday.getDate() + dIdx);
+        const dateStr = `${date.getDate()}/${date.getMonth() + 1}`;
+
+        let emptySlots = 0;
+        for (let t = 0; t < TASKS_PER_DAY; t++) {
+            if (!(wData.tasks[`t_name_${dIdx}_${t}`] || '').trim()) emptySlots++;
+        }
+        const isFull = emptySlots === 0;
+
+        const cell = document.createElement('div');
+        let cls = 'move-task-day-cell';
+        if (isFull) cls += ' move-task-day-cell--full';
+        cell.className = cls;
+        cell.innerHTML = `<div style="font-size:11px;font-weight:800;">${dayObj.name.slice(0, 3).toUpperCase()}</div><div style="font-size:10px;opacity:0.7;">${dateStr}</div>`;
+        if (!isFull) {
+            cell.addEventListener('click', () => _executeMoveTask(selectedWeekId, dIdx));
+        }
+        daysGrid.appendChild(cell);
+    });
+
+    daysSection.appendChild(daysGrid);
+    body.appendChild(daysSection);
+}
+
+function _executeMoveTask(targetWeekId, targetDayIdx) {
+    const src = store.moveTaskSource;
+    if (!src) return;
+
+    // Đảm bảo tuần đích tồn tại
+    if (!store.appData.weeks[targetWeekId]) {
+        store.appData.weeks[targetWeekId] = { tasks: {}, habits: {}, notes: {} };
+        _applyPersistentData(targetWeekId);
+    }
+
+    const srcWeekId = store.viewingWeekId;
+    const srcDay = src.dIdx;
+    const srcTask = src.tIdx;
+
+    // Đọc task data từ state (tuần hiện tại đang xem)
+    const taskData = _readTaskFromState(srcDay, srcTask);
+    if (!taskData.name.trim()) { closeMoveTaskModal(); return; }
+
+    // Tìm slot trống trong ngày đích
+    const dstWeekData = store.appData.weeks[targetWeekId];
+    let emptyIdx = -1;
+    for (let t = 0; t < TASKS_PER_DAY; t++) {
+        if (!(dstWeekData.tasks[`t_name_${targetDayIdx}_${t}`] || '').trim()) {
+            emptyIdx = t; break;
+        }
+    }
+    if (emptyIdx === -1) { alert('Day is full!'); return; }
+
+    // Ghi task vào tuần đích (appData trực tiếp)
+    const dstTasks = dstWeekData.tasks;
+    dstTasks[`t_name_${targetDayIdx}_${emptyIdx}`]    = taskData.name;
+    dstTasks[`t_h_start_${targetDayIdx}_${emptyIdx}`] = taskData.hStart;
+    dstTasks[`t_m_start_${targetDayIdx}_${emptyIdx}`] = taskData.mStart;
+    dstTasks[`t_h_end_${targetDayIdx}_${emptyIdx}`]   = taskData.hEnd;
+    dstTasks[`t_m_end_${targetDayIdx}_${emptyIdx}`]   = taskData.mEnd;
+    dstTasks[`t_check_${targetDayIdx}_${emptyIdx}`]   = taskData.checked;
+    dstTasks[`t_pri_${targetDayIdx}_${emptyIdx}`]     = taskData.pri;
+    dstTasks[`t_delay_${targetDayIdx}_${emptyIdx}`]   = taskData.delay;
+
+    // Xóa task khỏi tuần nguồn trong state và DOM
+    const emptyData = { name: '', hStart: '', mStart: '', hEnd: '', mEnd: '', checked: false, pri: '3', delay: '0' };
+    _writeTaskToState(srcDay, srcTask, emptyData);
+    _flushTaskToDOM(srcDay, srcTask);
+
+    // Nếu đang move trong cùng tuần, cũng cập nhật DOM ngay
+    if (targetWeekId === srcWeekId) {
+        _writeTaskToState(targetDayIdx, emptyIdx, taskData);
+        _flushTaskToDOM(targetDayIdx, emptyIdx);
+        sortTasks(targetDayIdx);
+        scheduler.uiUpdate(targetDayIdx);
+    }
+
+    // Sync state nguồn và lưu
+    store.appData.weeks[srcWeekId] = store.appData.weeks[srcWeekId] || { tasks: {}, habits: {}, notes: {} };
+    _syncStateFromDOM();
+    store.appData.weeks[srcWeekId].tasks = Object.assign({}, store.state.tasks);
+    sortTasks(srcDay);
+    scheduler.uiUpdate(srcDay);
+    saveGlobalData();
+
+    closeMoveTaskModal();
+}
+
+// ============================================================
+// 14. MODAL LOGIC
 // ============================================================
 function openNoteModal()    { store.openModal(); document.getElementById('note-modal').style.display = 'flex'; }
 function closeNoteModal()   { store.closeModal(); document.getElementById('note-modal').style.display = 'none'; }
@@ -1482,12 +1694,17 @@ function initEventDelegation() {
     });
     document.getElementById('priority-menu').addEventListener('click', handlePriorityMenuClick);
     document.body.addEventListener('click', handleModalCloseClick);
+
+    // Task action menu (Mark / Move Task)
+    document.getElementById('task-action-menu').addEventListener('click', handleTaskActionMenuClick);
     document.addEventListener('change', handleNotesChange);
     document.addEventListener('change', handleAbbrChange);
     document.addEventListener('change', handleMonthlyModalChange);
 
     const mainGrid = document.getElementById('main-grid');
     mainGrid.addEventListener('change',      handleMainGridChange);
+    mainGrid.addEventListener('click',       handleMainGridClick);
+    mainGrid.addEventListener('pointerdown', handleMainGridPointerDown);
     mainGrid.addEventListener('input', (e) => {
         if (!e.target.classList.contains('t-name')) return;
         _capitalizeFirstLetter(e.target);
@@ -1615,8 +1832,10 @@ function initEventDelegation() {
 }
 
 function handleDocumentClick(e) {
-    const menu = document.getElementById('priority-menu');
-    if (menu && !menu.contains(e.target)) menu.style.display = 'none';
+    const actionMenu = document.getElementById('task-action-menu');
+    const priorityMenu = document.getElementById('priority-menu');
+    if (actionMenu && !actionMenu.contains(e.target)) actionMenu.style.display = 'none';
+    if (priorityMenu && !priorityMenu.contains(e.target)) priorityMenu.style.display = 'none';
     if (e.target && e.target.id === 'focus-backdrop') closeFocus();
 }
 function handleDocumentContextMenu(e) {
@@ -1636,6 +1855,24 @@ function handleTopNavClick(e) {
     else if (a === 'open-abbr')         openAbbrModal();
     else if (a === 'open-settings')     openSettingsModal();
 }
+function handleTaskActionMenuClick(e) {
+    const item = e.target.closest('[data-action]');
+    if (!item) return;
+    const action = item.dataset.action;
+    document.getElementById('task-action-menu').style.display = 'none';
+    if (action === 'show-mark-submenu') {
+        // Hiện priority-menu tại vị trí task-action-menu đang đứng
+        const actionMenu = document.getElementById('task-action-menu');
+        const menu = document.getElementById('priority-menu');
+        menu.style.left = actionMenu.style.left;
+        menu.style.top  = actionMenu.style.top;
+        menu.style.display = 'block';
+    } else if (action === 'show-move-task') {
+        const d = store.rightClickDay; const t = store.rightClickTask;
+        if (d === null || t === null) return;
+        openMoveTaskModal(d, t);
+    }
+}
 function handlePriorityMenuClick(e) {
     const item = e.target.closest('[data-priority]');
     if (!item) return;
@@ -1651,6 +1888,7 @@ function handleModalCloseClick(e) {
     else if (id === 'monthly-modal')      closeMonthlyModal();
     else if (id === 'month-picker-modal') closeMonthPickerModal();
     else if (id === 'settings-modal')     closeSettingsModal();
+    else if (id === 'move-task-modal')    closeMoveTaskModal();
 }
 function handleMainGridContextMenu(e) {
     const cb = e.target.closest('input[type="checkbox"]');
@@ -1659,6 +1897,24 @@ function handleMainGridContextMenu(e) {
     if (!taskItem) return;
     const parts = taskItem.id.split('_');
     showContextMenu(e, parseInt(parts[2]), parseInt(parts[3]));
+}
+function handleMainGridPointerDown(e) {
+    // Intercept left-click trên checkbox để ngăn toggle và hiện menu
+    if (e.button !== 0) return;
+    const cb = e.target.closest('input[type="checkbox"].task-check-trigger');
+    if (!cb) return;
+    e.preventDefault(); // ngăn checkbox toggle
+}
+function handleMainGridClick(e) {
+    // Left-click trên checkbox → hiện task-action-menu (Mark / Move Task)
+    const cb = e.target.closest('input[type="checkbox"].task-check-trigger');
+    if (!cb) return;
+    const taskItem = cb.closest('.task-item');
+    if (!taskItem) return;
+    const parts = taskItem.id.split('_');
+    const dIdx = parseInt(parts[2]); const tIdx = parseInt(parts[3]);
+    _syncStateFromDOM();
+    showContextMenu(e, dIdx, tIdx);
 }
 function handleMainGridChange(e) {
     const taskItem = e.target.closest('.task-item');

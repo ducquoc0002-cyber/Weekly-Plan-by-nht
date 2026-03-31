@@ -43,12 +43,31 @@
         <button class="nav-btn" data-action="open-settings">⚙️ Settings</button>
     </div>
 
+    <!-- Task action menu: shown on left-click checkbox -->
+    <div id="task-action-menu" class="context-menu">
+        <div class="context-menu-item" data-action="show-mark-submenu">🏷️ Mark</div>
+        <div class="context-menu-item" data-action="show-move-task">📦 Move Task</div>
+    </div>
+
+    <!-- Mark submenu (replaces old priority-menu) -->
     <div id="priority-menu" class="context-menu">
         <div class="context-menu-item" data-priority="0"><div class="color-box bg-red"></div> Urgent</div>
         <div class="context-menu-item" data-priority="star">⭐ Starred</div>
         <div class="context-menu-item" data-priority="1"><div class="color-box bg-orange"></div> Important</div>
         <div class="context-menu-item" data-priority="2"><div class="color-box bg-green"></div> Normal</div>
         <div class="context-menu-item" data-priority="3"><div class="color-box bg-clear"></div> Clear Mark</div>
+    </div>
+
+    <!-- Move Task modal -->
+    <div id="move-task-modal" class="modal-overlay">
+        <div class="modal-content modal-content--md">
+            <div class="modal-header">
+                <h2>📦 Move Task</h2>
+                <button class="modal-close" data-close="move-task-modal">×</button>
+            </div>
+            <p class="modal-subtitle" id="move-task-subtitle">Select a month, then a week, then a day.</p>
+            <div id="move-task-body"></div>
+        </div>
     </div>
 
     <div id="chart-tooltip" class="chart-tooltip"></div>
