@@ -460,10 +460,27 @@ function _getLastActiveWeekId() {
     return ids[0] || null;
 }
 
+// Tìm tuần gần nhất thuộc tháng khác với tháng của targetWeekId
+// Dùng cho persistent data: copy từ tháng trước sang tháng mới
+function _getSourceWeekForPersist(targetWeekId) {
+    const weeks = store.appData.weeks;
+    const tp = targetWeekId.split('-');
+    const targetMonth = `${tp[0]}-${tp[1]}`;
+    // Lấy tất cả tuần không thuộc cùng tháng với target, sort giảm dần → lấy gần nhất
+    const ids = Object.keys(weeks)
+        .filter(id => {
+            const p = id.split('-');
+            return `${p[0]}-${p[1]}` !== targetMonth;
+        })
+        .sort()
+        .reverse();
+    return ids[0] || null;
+}
+
 function _applyPersistentData(targetWeekId) {
     try {
         const s = store.appData.settings || {};
-        const lastId = _getLastActiveWeekId();
+        const lastId = _getSourceWeekForPersist(targetWeekId);
         if (!lastId) return;
         const src = store.appData.weeks[lastId];
         const dst = store.appData.weeks[targetWeekId];
