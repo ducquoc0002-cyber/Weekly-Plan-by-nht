@@ -1690,6 +1690,7 @@ function initEventDelegation() {
     document.addEventListener('contextmenu', handleDocumentContextMenu);
     document.addEventListener('click', (e) => {
         if (e.target.closest('#auth-overlay')) return;
+        if (e.target.closest('#task-action-menu')) return;
         if (e.target.closest('[data-action]')) handleTopNavClick(e);
     });
     document.getElementById('priority-menu').addEventListener('click', handlePriorityMenuClick);
@@ -1835,7 +1836,8 @@ function handleDocumentClick(e) {
     const actionMenu = document.getElementById('task-action-menu');
     const priorityMenu = document.getElementById('priority-menu');
     if (actionMenu && !actionMenu.contains(e.target)) actionMenu.style.display = 'none';
-    if (priorityMenu && !priorityMenu.contains(e.target)) priorityMenu.style.display = 'none';
+    // Don't hide priority-menu if the click came from inside task-action-menu (Mark button opens it)
+    if (priorityMenu && !priorityMenu.contains(e.target) && !actionMenu.contains(e.target)) priorityMenu.style.display = 'none';
     if (e.target && e.target.id === 'focus-backdrop') closeFocus();
 }
 function handleDocumentContextMenu(e) {

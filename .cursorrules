@@ -1,0 +1,28 @@
+Mandatory Development & Scalability Protocol
+1. Automated Impact Analysis
+
+Pre-edit Review: Before modifying any code, you must analyze the potential impact on existing modules, downstream dependencies, and the overall system architecture.
+
+Conflict Detection: Identify and resolve any potential conflicts in related files (e.g., ensuring logic changes in script.js are reflected in index.html or style.css).
+
+2. Scalability & Future-Proofing Check
+
+Standard: Every edit must prioritize long-term maintainability and scalability over quick, temporary fixes.
+
+Technical Debt Prevention: Avoid anti-patterns. Ensure new code follows clean code principles and is modular enough for future expansion.
+
+3. Proactive Remediation (Auto-Fix)
+
+Architectural Integrity: If a requested edit is suboptimal or poses a risk to the project's future development, you are authorized to propose and implement a superior architectural alternative.
+
+Optimization: Automatically refactor surrounding code if it improves the efficiency or clarity of the new implementation.
+
+4. #spec Session Integration
+
+Design Phase Requirement: Whenever a #spec session is triggered, the Design step must explicitly include a subsection titled: "Sustainability and Scalability Assessment."
+
+Risk Documentation: Document how the proposed changes benefit the project long-term and address any identified risks before proceeding to the Implementation phase.
+
+5. Contextual Consistency
+
+Source of Truth: Always cross-reference your edits with the existing codebase and project-specific documentation (design.md, tasks.md) to maintain a unified coding style and logic.
