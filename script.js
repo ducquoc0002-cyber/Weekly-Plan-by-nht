@@ -304,7 +304,9 @@ function loadWeekData() {
     const wData = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {}, notes: {} };
     for (let d = 0; d < 7; d++) {
         for (let t = 0; t < TASKS_PER_DAY; t++) {
-            document.getElementById(`t_name_${d}_${t}`).value    = wData.tasks[`t_name_${d}_${t}`]    || '';
+            const nameEl = document.getElementById(`t_name_${d}_${t}`);
+            nameEl.value = wData.tasks[`t_name_${d}_${t}`] || '';
+            autoResizeTextarea(nameEl);
             document.getElementById(`t_h_start_${d}_${t}`).value = wData.tasks[`t_h_start_${d}_${t}`] || '';
             document.getElementById(`t_m_start_${d}_${t}`).value = wData.tasks[`t_m_start_${d}_${t}`] || '';
             document.getElementById(`t_h_end_${d}_${t}`).value   = wData.tasks[`t_h_end_${d}_${t}`]   || '';
@@ -722,8 +724,10 @@ function createTaskElement(dIdx, tIdx) {
     dragZone.appendChild(starIcon); dragZone.appendChild(checkbox);
 
     const inputContainer = document.createElement('div'); inputContainer.className = 'task-input-container';
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text'; nameInput.id = `t_name_${dIdx}_${tIdx}`; nameInput.className = 't-name'; nameInput.placeholder = '';
+    const nameInput = document.createElement('textarea');
+    nameInput.id = `t_name_${dIdx}_${tIdx}`; nameInput.className = 't-name'; nameInput.placeholder = '';
+    nameInput.rows = 1;
+    nameInput.addEventListener('input', () => autoResizeTextarea(nameInput));
 
     const timeWrapper = document.createElement('div'); timeWrapper.className = 'time-input-wrapper';
     const mkPart = (field) => {
@@ -910,7 +914,7 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
 // ============================================================
 // 11. TASK LOGIC
 // ============================================================
-function autoResizeTextarea(el) { el.style.height = '18px'; el.style.height = el.scrollHeight + 'px'; }
+function autoResizeTextarea(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
 
 function formatTimeInput(el) {
     let val = el.value.trim().replace(/\D/g, '');
