@@ -316,6 +316,7 @@ function loadWeekData() {
             document.getElementById(`task_div_${d}_${t}`).setAttribute('data-delay',    wData.tasks[`t_delay_${d}_${t}`] || '0');
         }
         sortTasks(d);
+        trimEmptyTaskSlots(d);
     }
     for (let h = 0; h < HABITS_COUNT; h++) {
         const hName = document.getElementById(`h_name_${h}`);
@@ -727,7 +728,7 @@ function createTaskElement(dIdx, tIdx) {
     const nameInput = document.createElement('textarea');
     nameInput.id = `t_name_${dIdx}_${tIdx}`; nameInput.className = 't-name'; nameInput.placeholder = '';
     nameInput.rows = 1;
-    nameInput.addEventListener('input', () => autoResizeTextarea(nameInput));
+    nameInput.addEventListener('input', () => { autoResizeTextarea(nameInput); trimEmptyTaskSlots(dIdx); });
 
     const timeWrapper = document.createElement('div'); timeWrapper.className = 'time-input-wrapper';
     const mkPart = (field) => {
@@ -875,6 +876,7 @@ function dropTask(e, targetDayIdx) {
     scheduler.save();
     requestAnimationFrame(() => {
         updateDay(sourceDay); updateDay(targetDayIdx); updateWeeklySummary(); drawWaveChart();
+        trimEmptyTaskSlots(sourceDay); trimEmptyTaskSlots(targetDayIdx);
     });
     sortTasks(targetDayIdx); sortTasks(sourceDay);
 }
@@ -904,6 +906,8 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
         scheduler.uiUpdate(sDay); scheduler.uiUpdate(targetDayIdx);
         sortTasks(targetDayIdx);
         if (sDay !== targetDayIdx) sortTasks(sDay);
+        trimEmptyTaskSlots(sDay);
+        if (sDay !== targetDayIdx) trimEmptyTaskSlots(targetDayIdx);
         store.draggedTask = null;
     } else {
         store.draggedTask = { dIdx: sDay, tIdx: sTask };
@@ -915,6 +919,55 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
 // 11. TASK LOGIC
 // ============================================================
 function autoResizeTextarea(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+
+/**
+ * Hide trailing empty task slots for a day column, always keeping
+ * exactly one visible empty slot as a buffer for new input.
+ * Slots with content, a checkbox checked, or a non-default priority are never hidden.
+ */
+function trimEmptyTaskSlots(dIdx) {
+    // Collect all task divs in DOM order
+    const items = [];
+    for (let t = 0; t < TASKS_PER_DAY; t++) {
+        const div  = document.getElementById(`task_div_${dIdx}_${t}`);
+        const name = document.getElementById(`t_name_${dIdx}_${t}`);
+        const cb   = document.getElementById(`t_check_${dIdx}_${t}`);
+        if (div && name && cb) items.push({ div, name, cb });
+    }
+
+    // Mark each slot as "occupied" if it has text, is checked, or has a non-default priority/delay
+    const occupied = items.map(({ div, name, cb }) => {
+        const hasText = name.value.trim() !== '';
+        const isChecked = cb.checked;
+        const pri   = div.getAttribute('data-priority');
+        const delay = div.getAttribute('data-delay');
+        return hasText || isChecked || (pri !== '3' && pri !== null) || (delay !== '0' && delay !== null);
+    });
+
+    // Find the last occupied index
+    let lastOccupied = -1;
+    for (let i = occupied.length - 1; i >= 0; i--) {
+        if (occupied[i]) { lastOccupied = i; break; }
+    }
+
+    // Show slots up to lastOccupied + 1 (the buffer), hide the rest
+    const showUpTo = Math.min(lastOccupied + 1, items.length - 1); // buffer slot index
+    items.forEach(({ div }, i) => {
+        if (i <= showUpTo) {
+            div.classList.remove('task-item--hidden');
+        } else {
+            div.classList.add('task-item--hidden');
+        }
+    });
+}
+
+/**
+ * When a slot gains content, ensure the next empty slot is visible.
+ * Called after flushing task data to DOM.
+ */
+function ensureTaskSlotVisible(dIdx) {
+    trimEmptyTaskSlots(dIdx);
+}
 
 function formatTimeInput(el) {
     let val = el.value.trim().replace(/\D/g, '');
@@ -965,6 +1018,7 @@ function sortTasks(dIdx) {
         return wa - wb;
     });
     items.forEach(item => list.appendChild(item));
+    trimEmptyTaskSlots(dIdx);
 }
 
 function updateDayAndSave(dIdx) { scheduler.save(); scheduler.uiUpdate(dIdx); }
@@ -1399,7 +1453,14 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
 // ============================================================
 // 14. MODAL LOGIC
 // ============================================================
-function openNoteModal()    { store.openModal(); document.getElementById('note-modal').style.display = 'flex'; }
+function openNoteModal() {
+    store.openModal();
+    document.getElementById('note-modal').style.display = 'flex';
+    // Re-run resize now that the modal is visible (scrollHeight was 0 while hidden)
+    requestAnimationFrame(() => {
+        document.querySelectorAll('#notes-container textarea').forEach(autoResizeTextarea);
+    });
+}
 function closeNoteModal()   { store.closeModal(); document.getElementById('note-modal').style.display = 'none'; }
 function openAbbrModal()    { store.openModal(); document.getElementById('abbr-modal').style.display = 'flex'; }
 function closeAbbrModal()   { store.closeModal(); document.getElementById('abbr-modal').style.display = 'none'; }
