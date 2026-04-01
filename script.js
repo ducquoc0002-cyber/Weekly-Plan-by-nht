@@ -302,6 +302,13 @@ function saveData() {
 
 function loadWeekData() {
     const wData = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {}, notes: {} };
+    // Restore all task slots to visible before populating (default: 10 slots shown)
+    for (let d = 0; d < 7; d++) {
+        for (let t = 0; t < TASKS_PER_DAY; t++) {
+            const div = document.getElementById(`task_div_${d}_${t}`);
+            if (div) div.classList.remove('task-item--hidden');
+        }
+    }
     for (let d = 0; d < 7; d++) {
         for (let t = 0; t < TASKS_PER_DAY; t++) {
             const nameEl = document.getElementById(`t_name_${d}_${t}`);
@@ -316,7 +323,6 @@ function loadWeekData() {
             document.getElementById(`task_div_${d}_${t}`).setAttribute('data-delay',    wData.tasks[`t_delay_${d}_${t}`] || '0');
         }
         sortTasks(d);
-        trimEmptyTaskSlots(d);
     }
     for (let h = 0; h < HABITS_COUNT; h++) {
         const hName = document.getElementById(`h_name_${h}`);
@@ -728,7 +734,7 @@ function createTaskElement(dIdx, tIdx) {
     const nameInput = document.createElement('textarea');
     nameInput.id = `t_name_${dIdx}_${tIdx}`; nameInput.className = 't-name'; nameInput.placeholder = '';
     nameInput.rows = 1;
-    nameInput.addEventListener('input', () => { autoResizeTextarea(nameInput); trimEmptyTaskSlots(dIdx); });
+    nameInput.addEventListener('input', () => { autoResizeTextarea(nameInput); smartExpandTask(dIdx); });
 
     const timeWrapper = document.createElement('div'); timeWrapper.className = 'time-input-wrapper';
     const mkPart = (field) => {
@@ -876,7 +882,6 @@ function dropTask(e, targetDayIdx) {
     scheduler.save();
     requestAnimationFrame(() => {
         updateDay(sourceDay); updateDay(targetDayIdx); updateWeeklySummary(); drawWaveChart();
-        trimEmptyTaskSlots(sourceDay); trimEmptyTaskSlots(targetDayIdx);
     });
     sortTasks(targetDayIdx); sortTasks(sourceDay);
 }
@@ -906,8 +911,6 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
         scheduler.uiUpdate(sDay); scheduler.uiUpdate(targetDayIdx);
         sortTasks(targetDayIdx);
         if (sDay !== targetDayIdx) sortTasks(sDay);
-        trimEmptyTaskSlots(sDay);
-        if (sDay !== targetDayIdx) trimEmptyTaskSlots(targetDayIdx);
         store.draggedTask = null;
     } else {
         store.draggedTask = { dIdx: sDay, tIdx: sTask };
@@ -921,52 +924,55 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
 function autoResizeTextarea(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
 
 /**
- * Hide trailing empty task slots for a day column, always keeping
- * exactly one visible empty slot as a buffer for new input.
- * Slots with content, a checkbox checked, or a non-default priority are never hidden.
+ * Called on every input event for a task name textarea.
+ * If the textarea is wrapping (multi-line), try to reclaim space by hiding
+ * the last truly-empty task slot in the same day column.
+ * If no empty slot is available, the card grows naturally — CSS grid will
+ * stretch all sibling cards in the same row to match.
+ * Single-line textareas never trigger slot removal.
  */
-function trimEmptyTaskSlots(dIdx) {
-    // Collect all task divs in DOM order
+function smartExpandTask(dIdx) {
+    // Collect all task items for this day
     const items = [];
     for (let t = 0; t < TASKS_PER_DAY; t++) {
         const div  = document.getElementById(`task_div_${dIdx}_${t}`);
         const name = document.getElementById(`t_name_${dIdx}_${t}`);
         const cb   = document.getElementById(`t_check_${dIdx}_${t}`);
-        if (div && name && cb) items.push({ div, name, cb });
+        if (div && name && cb) items.push({ div, name, cb, t });
     }
 
-    // Mark each slot as "occupied" if it has text, is checked, or has a non-default priority/delay
-    const occupied = items.map(({ div, name, cb }) => {
-        const hasText = name.value.trim() !== '';
-        const isChecked = cb.checked;
-        const pri   = div.getAttribute('data-priority');
-        const delay = div.getAttribute('data-delay');
-        return hasText || isChecked || (pri !== '3' && pri !== null) || (delay !== '0' && delay !== null);
-    });
+    // Count how many visible slots are currently hidden (already reclaimed)
+    const hiddenCount = items.filter(({ div }) => div.classList.contains('task-item--hidden')).length;
 
-    // Find the last occupied index
-    let lastOccupied = -1;
-    for (let i = occupied.length - 1; i >= 0; i--) {
-        if (occupied[i]) { lastOccupied = i; break; }
+    // Check if any visible textarea is actually wrapping (height > single line ~22px)
+    const singleLineH = 22; // approximate px height of one line
+    const anyWrapping = items.some(({ name, div }) =>
+        !div.classList.contains('task-item--hidden') && name.offsetHeight > singleLineH
+    );
+
+    if (!anyWrapping) {
+        // Nothing is wrapping — restore all hidden slots back to visible
+        items.forEach(({ div }) => div.classList.remove('task-item--hidden'));
+        return;
     }
 
-    // Show slots up to lastOccupied + 1 (the buffer), hide the rest
-    const showUpTo = Math.min(lastOccupied + 1, items.length - 1); // buffer slot index
-    items.forEach(({ div }, i) => {
-        if (i <= showUpTo) {
-            div.classList.remove('task-item--hidden');
-        } else {
-            div.classList.add('task-item--hidden');
-        }
-    });
-}
+    // Find the last visible slot that is completely empty (no text, unchecked, default priority/delay)
+    let lastEmptyIdx = -1;
+    for (let i = items.length - 1; i >= 0; i--) {
+        const { div, name, cb } = items[i];
+        if (div.classList.contains('task-item--hidden')) continue; // already hidden
+        const isEmpty = name.value.trim() === '' &&
+                        !cb.checked &&
+                        (div.getAttribute('data-priority') === '3' || div.getAttribute('data-priority') === null) &&
+                        (div.getAttribute('data-delay') === '0' || div.getAttribute('data-delay') === null);
+        if (isEmpty) { lastEmptyIdx = i; break; }
+    }
 
-/**
- * When a slot gains content, ensure the next empty slot is visible.
- * Called after flushing task data to DOM.
- */
-function ensureTaskSlotVisible(dIdx) {
-    trimEmptyTaskSlots(dIdx);
+    if (lastEmptyIdx !== -1) {
+        // Hide the last empty slot to reclaim its height
+        items[lastEmptyIdx].div.classList.add('task-item--hidden');
+    }
+    // If no empty slot found: card grows naturally, CSS grid row stretches all siblings
 }
 
 function formatTimeInput(el) {
@@ -1018,7 +1024,6 @@ function sortTasks(dIdx) {
         return wa - wb;
     });
     items.forEach(item => list.appendChild(item));
-    trimEmptyTaskSlots(dIdx);
 }
 
 function updateDayAndSave(dIdx) { scheduler.save(); scheduler.uiUpdate(dIdx); }
