@@ -340,6 +340,15 @@ function loadWeekData() {
         if (el) { el.value = wData.notes?.[`note_${i}`] || ''; autoResizeTextarea(el); }
     }
     _syncStateFromDOM();
+    // Defer task resize until after layout is painted so scrollHeight is accurate
+    requestAnimationFrame(() => {
+        for (let d = 0; d < 7; d++) {
+            for (let t = 0; t < TASKS_PER_DAY; t++) {
+                const nameEl = document.getElementById(`t_name_${d}_${t}`);
+                if (nameEl) autoResizeTextarea(nameEl);
+            }
+        }
+    });
 }
 
 function saveMonthly() {
@@ -877,6 +886,9 @@ function dropTask(e, targetDayIdx) {
     // 2. Flush to DOM
     _flushTaskToDOM(targetDayIdx, emptyIdx);
     _flushTaskToDOM(sourceDay, sourceTask);
+    // Ensure the target slot is visible (it may have been hidden by smartExpandTask)
+    const targetSlotDiv = document.getElementById(`task_div_${targetDayIdx}_${emptyIdx}`);
+    if (targetSlotDiv) targetSlotDiv.classList.remove('task-item--hidden');
 
     // 3. Save & update UI
     scheduler.save();
@@ -905,6 +917,11 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
         // 2. Flush to DOM
         _flushTaskToDOM(targetDayIdx, targetTaskIdx);
         _flushTaskToDOM(sDay, sTask);
+        // Ensure both slots are visible after swap
+        const tDiv2 = document.getElementById(`task_div_${targetDayIdx}_${targetTaskIdx}`);
+        const sDiv2 = document.getElementById(`task_div_${sDay}_${sTask}`);
+        if (tDiv2) tDiv2.classList.remove('task-item--hidden');
+        if (sDiv2) sDiv2.classList.remove('task-item--hidden');
 
         // 3. Save & update UI
         scheduler.save();
