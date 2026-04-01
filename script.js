@@ -328,7 +328,7 @@ function loadWeekData() {
     store.state.notesCount = targetCount;
     for (let i = 1; i <= targetCount; i++) {
         const el = document.getElementById(`note_input_${i}`);
-        if (el) el.value = wData.notes?.[`note_${i}`] || '';
+        if (el) { el.value = wData.notes?.[`note_${i}`] || ''; autoResizeTextarea(el); }
     }
     _syncStateFromDOM();
 }
@@ -556,10 +556,11 @@ function _createNoteRow(i) {
     row.className = 'note-row';
     const label = document.createElement('label');
     label.textContent = `${i}.`;
-    const input = document.createElement('input');
-    input.type  = 'text';
+    const input = document.createElement('textarea');
     input.id    = `note_input_${i}`;
     input.placeholder = '...';
+    input.rows  = 1;
+    input.addEventListener('input', () => autoResizeTextarea(input));
     row.appendChild(label);
     row.appendChild(input);
     return row;
