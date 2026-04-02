@@ -733,10 +733,10 @@ function createTaskElement(dIdx, tIdx) {
     taskDiv.setAttribute('data-delay', '0');
 
     const dragZone = document.createElement('div');
-    dragZone.className = 'task-drag-zone'; dragZone.draggable = true; dragZone.title = 'Drag to move';
+    dragZone.className = 'task-drag-zone'; dragZone.title = 'Drag to move';
     const starIcon = document.createElement('div'); starIcon.className = 'task-star-icon'; starIcon.textContent = '⭐';
     const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = `t_check_${dIdx}_${tIdx}`;
-    checkbox.className = 'task-check-trigger';
+    checkbox.className = 'task-check-trigger'; checkbox.draggable = true; checkbox.title = 'Drag to move task';
     dragZone.appendChild(starIcon); dragZone.appendChild(checkbox);
 
     const inputContainer = document.createElement('div'); inputContainer.className = 'task-input-container';
@@ -1863,9 +1863,9 @@ function initEventDelegation() {
     let _touchClone    = null;
 
     mainGrid.addEventListener('touchstart', (e) => {
-        const dragZone = e.target.closest('.task-drag-zone');
-        if (!dragZone) return;
-        const taskItem = dragZone.closest('.task-item');
+        const cb = e.target.closest('input[type="checkbox"].task-check-trigger');
+        if (!cb) return;
+        const taskItem = cb.closest('.task-item');
         if (!taskItem) return;
         const parts = taskItem.id.split('_');
         const dIdx = parseInt(parts[2]); const tIdx = parseInt(parts[3]);
@@ -2033,9 +2033,9 @@ function handleMainGridKeydown(e) {
     if (idx !== -1) handleTimeNavigation(e, d, t, idx);
 }
 function handleMainGridDragStart(e) {
-    const dragZone = e.target.closest('.task-drag-zone');
-    if (!dragZone) return;
-    const taskItem = dragZone.closest('.task-item');
+    const cb = e.target.closest('input[type="checkbox"].task-check-trigger');
+    if (!cb) return;
+    const taskItem = cb.closest('.task-item');
     if (!taskItem) return;
     const parts = taskItem.id.split('_');
     dragStartTask(e, parseInt(parts[2]), parseInt(parts[3]));
