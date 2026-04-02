@@ -1990,16 +1990,15 @@ function handleMainGridContextMenu(e) {
     showContextMenu(e, parseInt(parts[2]), parseInt(parts[3]));
 }
 function handleMainGridPointerDown(e) {
-    // Intercept left-click trên checkbox để ngăn toggle và hiện menu
-    if (e.button !== 0) return;
-    const cb = e.target.closest('input[type="checkbox"].task-check-trigger');
-    if (!cb) return;
-    e.preventDefault(); // ngăn checkbox toggle
+    // Intercept left-click trên checkbox để ngăn toggle — nhưng KHÔNG preventDefault
+    // vì preventDefault trên pointerdown sẽ chặn cả dragstart event
+    // Việc ngăn toggle được xử lý bởi handleMainGridClick (hiện context menu thay vì toggle)
 }
 function handleMainGridClick(e) {
     // Left-click trên checkbox → hiện task-action-menu (Mark / Move Task)
     const cb = e.target.closest('input[type="checkbox"].task-check-trigger');
     if (!cb) return;
+    e.preventDefault(); // ngăn checkbox tự toggle — menu sẽ xử lý thay
     const taskItem = cb.closest('.task-item');
     if (!taskItem) return;
     const parts = taskItem.id.split('_');
