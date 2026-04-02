@@ -1019,14 +1019,19 @@ function showContextMenu(e, dIdx, tIdx) {
     const toggleItem = menu.querySelector('[data-action="toggle-done"]');
     if (toggleItem && cb) {
         if (cb.checked) {
-            toggleItem.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:#D32F2F;border-radius:3px;color:#fff;font-size:11px;font-weight:900;margin-right:8px;flex-shrink:0;">✕</span> Incomplete';
+            toggleItem.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;background:#D32F2F;border-radius:2px;color:#fff;font-size:9px;font-weight:900;flex-shrink:0;">✕</span> Incomplete';
         } else {
             toggleItem.innerHTML = '✅ Complete';
         }
     }
+    // Position menu relative to the checkbox element, accounting for CSS zoom
+    const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
+    const rect = cb ? cb.getBoundingClientRect() : null;
+    const menuX = rect ? (rect.left + window.scrollX / zoom) : (e.clientX / zoom + window.scrollX / zoom);
+    const menuY = rect ? (rect.bottom / zoom + window.scrollY / zoom + 4) : (e.clientY / zoom + window.scrollY / zoom);
+    menu.style.left = menuX + 'px';
+    menu.style.top  = menuY + 'px';
     menu.style.display = 'block';
-    menu.style.left = (e.clientX + window.scrollX) + 'px';
-    menu.style.top  = (e.clientY + window.scrollY) + 'px';
     store.setRightClick(dIdx, tIdx);
     // Hide priority-menu if currently visible
     document.getElementById('priority-menu').style.display = 'none';
