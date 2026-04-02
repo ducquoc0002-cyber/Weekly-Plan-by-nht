@@ -2047,16 +2047,16 @@ function handleMainGridPointerDown(e) {
     // Toggle prevention is handled by handleMainGridClick (shows context menu instead).
 }
 function handleMainGridClick(e) {
-    // Left-click on checkbox → show task-action-menu (Mark / Move Task)
+    // Left-click on checkbox → toggle done state directly
     const cb = e.target.closest('input[type="checkbox"].task-check-trigger');
     if (!cb) return;
-    e.preventDefault(); // prevent checkbox from toggling — menu handles it instead
     const taskItem = cb.closest('.task-item');
     if (!taskItem) return;
     const parts = taskItem.id.split('_');
     const dIdx = parseInt(parts[2]); const tIdx = parseInt(parts[3]);
-    _syncStateFromDOM();
-    showContextMenu(e, dIdx, tIdx);
+    // Allow native toggle, then sync state and update UI
+    _stateSetTask(dIdx, tIdx, 'check', cb.checked);
+    updateDayAndSave(dIdx);
 }
 function handleMainGridChange(e) {
     const taskItem = e.target.closest('.task-item');
