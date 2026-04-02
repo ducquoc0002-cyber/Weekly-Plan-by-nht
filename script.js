@@ -1014,6 +1014,16 @@ function handleTimeNavigation(e, dIdx, tIdx, currentIdx) {
 function showContextMenu(e, dIdx, tIdx) {
     // Show task-action-menu (Mark / Move Task)
     const menu = document.getElementById('task-action-menu');
+    // Update toggle label based on current checked state
+    const cb = document.getElementById(`t_check_${dIdx}_${tIdx}`);
+    const toggleItem = menu.querySelector('[data-action="toggle-done"]');
+    if (toggleItem && cb) {
+        if (cb.checked) {
+            toggleItem.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:#D32F2F;border-radius:3px;color:#fff;font-size:11px;font-weight:900;margin-right:8px;flex-shrink:0;">✕</span> Incomplete';
+        } else {
+            toggleItem.innerHTML = '✅ Complete';
+        }
+    }
     menu.style.display = 'block';
     menu.style.left = (e.clientX + window.scrollX) + 'px';
     menu.style.top  = (e.clientY + window.scrollY) + 'px';
