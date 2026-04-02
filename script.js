@@ -2002,8 +2002,12 @@ function handleTaskActionMenuClick(e) {
     if (!item) return;
     const action = item.dataset.action;
     document.getElementById('task-action-menu').style.display = 'none';
-    if (action === 'show-mark-submenu') {
-        // Show priority-menu at the same position as task-action-menu
+    if (action === 'toggle-done') {
+        const d = store.rightClickDay; const t = store.rightClickTask;
+        if (d === null || t === null) return;
+        const cb = document.getElementById(`t_check_${d}_${t}`);
+        if (cb) { cb.checked = !cb.checked; _stateSetTask(d, t, 'check', cb.checked); updateDayAndSave(d); }
+    } else if (action === 'show-mark-submenu') {        // Show priority-menu at the same position as task-action-menu
         const actionMenu = document.getElementById('task-action-menu');
         const menu = document.getElementById('priority-menu');
         menu.style.left = actionMenu.style.left;
