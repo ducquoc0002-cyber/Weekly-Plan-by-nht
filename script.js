@@ -56,7 +56,7 @@ const store = (() => {
     let _currentRightClickDay  = null;
     let _currentRightClickTask = null;
     let _draggedTaskInfo  = null;
-    let _moveTaskSource   = null; // { dIdx, tIdx } — task đang chờ được move
+    let _moveTaskSource   = null; // { dIdx, tIdx } — task waiting to be moved
 
     return {
         // currentUser
@@ -144,7 +144,7 @@ function _stateSetTask(d, t, field, value) {
     store.state.tasks[`t_${field}_${d}_${t}`] = value;
 }
 
-/** Capitalize chữ đầu tiên của input, giữ nguyên cursor position */
+/** Capitalize the first letter of an input, preserving cursor position */
 function _capitalizeFirstLetter(el) {
     if (!el.value || el.value[0] === el.value[0].toUpperCase()) return;
     const pos = el.selectionStart;
@@ -441,7 +441,7 @@ function getMonthWeeks() {
 // 8. INIT & LIFECYCLE
 // ============================================================
 window.onload = () => {
-    // Gán auth listener ngay khi trang load, không chờ login xong
+    // Attach auth listener immediately on page load, before login completes
     document.getElementById('auth-overlay').addEventListener('click', handleAuthClick);
     checkAuth();
 };
@@ -482,13 +482,13 @@ function _getLastActiveWeekId() {
     return ids[0] || null;
 }
 
-// Tìm tuần gần nhất thuộc tháng khác với tháng của targetWeekId
-// Dùng cho persistent data: copy từ tháng trước sang tháng mới
+// Find the most recent week that belongs to a different month than targetWeekId.
+// Used for persistent data: copy from the previous month into the new one.
 function _getSourceWeekForPersist(targetWeekId) {
     const weeks = store.appData.weeks;
     const tp = targetWeekId.split('-');
     const targetMonth = `${tp[0]}-${tp[1]}`;
-    // Lấy tất cả tuần không thuộc cùng tháng với target, sort giảm dần → lấy gần nhất
+    // Get all weeks not in the same month as target, sort descending → take the nearest
     const ids = Object.keys(weeks)
         .filter(id => {
             const p = id.split('-');
@@ -511,10 +511,10 @@ function _applyPersistentData(targetWeekId) {
             dst.notesCount = src.notesCount || 10;
         }
         if (s.persistentAbbr && store.appData.abbrs) {
-            // abbrs là global, không cần copy per-week
+            // abbrs are global — no per-week copy needed
         }
         if (s.persistentHabit && src.habits) {
-            // Chỉ copy tên habit, không copy trạng thái check
+            // Copy habit names only, not check states
             const habitNames = {};
             for (let h = 0; h < HABITS_COUNT; h++) {
                 habitNames[`h_name_${h}`] = src.habits[`h_name_${h}`] || '';
@@ -598,7 +598,7 @@ function initNotesUI() {
     const addBtn = document.createElement('button');
     addBtn.className = 'note-add-btn';
     addBtn.textContent = '+';
-    addBtn.title = 'Thêm dòng ghi chú';
+    addBtn.title = 'Add note';
     addBtn.addEventListener('click', addNoteRow);
     addRow.appendChild(addBtn);
     fragment.appendChild(addRow);
@@ -624,11 +624,11 @@ function _createAbbrRow(i) {
     const kInput = document.createElement('input');
     kInput.type  = 'text';
     kInput.id    = `abbr_k_${i}`;
-    kInput.placeholder = 'Viết tắt';
+    kInput.placeholder = 'Abbreviation';
     const vInput = document.createElement('input');
     vInput.type  = 'text';
     vInput.id    = `abbr_v_${i}`;
-    vInput.placeholder = 'Nghĩa';
+    vInput.placeholder = 'Meaning';
     row.appendChild(kInput);
     row.appendChild(vInput);
     return row;
@@ -648,7 +648,7 @@ function initAbbrUI() {
     const addBtn = document.createElement('button');
     addBtn.className = 'abbr-add-btn';
     addBtn.textContent = '+';
-    addBtn.title = 'Thêm từ viết tắt';
+    addBtn.title = 'Add abbreviation';
     addBtn.addEventListener('click', addAbbrRow);
     addRow.appendChild(addBtn);
     fragment.appendChild(addRow);
@@ -1012,13 +1012,13 @@ function handleTimeNavigation(e, dIdx, tIdx, currentIdx) {
 }
 
 function showContextMenu(e, dIdx, tIdx) {
-    // Hiện task-action-menu (Mark / Move Task)
+    // Show task-action-menu (Mark / Move Task)
     const menu = document.getElementById('task-action-menu');
     menu.style.display = 'block';
     menu.style.left = (e.clientX + window.scrollX) + 'px';
     menu.style.top  = (e.clientY + window.scrollY) + 'px';
     store.setRightClick(dIdx, tIdx);
-    // Ẩn priority-menu nếu đang hiện
+    // Hide priority-menu if currently visible
     document.getElementById('priority-menu').style.display = 'none';
 }
 
@@ -1271,7 +1271,7 @@ function drawPieChart(container, habitStats) {
 // 13. MOVE TASK FEATURE
 // ============================================================
 
-/** Mở Move Task modal với picker tháng */
+/** Open Move Task modal with month picker */
 function openMoveTaskModal(dIdx, tIdx) {
     store.moveTaskSource = { dIdx, tIdx };
     store.openModal();
@@ -1288,7 +1288,7 @@ function closeMoveTaskModal() {
     document.getElementById('move-task-modal').style.display = 'none';
 }
 
-/** Render toàn bộ body của move-task modal */
+/** Render the full body of the move-task modal */
 function _renderMoveTaskBody(selectedMonthId, selectedWeekId) {
     const body = document.getElementById('move-task-body');
     body.innerHTML = '';
@@ -1413,7 +1413,7 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
     const src = store.moveTaskSource;
     if (!src) return;
 
-    // Đảm bảo tuần đích tồn tại
+    // Ensure the target week exists
     if (!store.appData.weeks[targetWeekId]) {
         store.appData.weeks[targetWeekId] = { tasks: {}, habits: {}, notes: {} };
         _applyPersistentData(targetWeekId);
@@ -1423,11 +1423,11 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
     const srcDay = src.dIdx;
     const srcTask = src.tIdx;
 
-    // Đọc task data từ state (tuần hiện tại đang xem)
+    // Read task data from state (currently viewed week)
     const taskData = _readTaskFromState(srcDay, srcTask);
     if (!taskData.name.trim()) { closeMoveTaskModal(); return; }
 
-    // Tìm slot trống trong ngày đích
+    // Find an empty slot in the target day
     const dstWeekData = store.appData.weeks[targetWeekId];
     let emptyIdx = -1;
     for (let t = 0; t < TASKS_PER_DAY; t++) {
@@ -1437,7 +1437,7 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
     }
     if (emptyIdx === -1) { alert('Day is full!'); return; }
 
-    // Ghi task vào tuần đích (appData trực tiếp)
+    // Write task into the target week (directly in appData)
     const dstTasks = dstWeekData.tasks;
     dstTasks[`t_name_${targetDayIdx}_${emptyIdx}`]    = taskData.name;
     dstTasks[`t_h_start_${targetDayIdx}_${emptyIdx}`] = taskData.hStart;
@@ -1448,12 +1448,12 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
     dstTasks[`t_pri_${targetDayIdx}_${emptyIdx}`]     = taskData.pri;
     dstTasks[`t_delay_${targetDayIdx}_${emptyIdx}`]   = taskData.delay;
 
-    // Xóa task khỏi tuần nguồn trong state và DOM
+    // Clear task from source week in state and DOM
     const emptyData = { name: '', hStart: '', mStart: '', hEnd: '', mEnd: '', checked: false, pri: '3', delay: '0' };
     _writeTaskToState(srcDay, srcTask, emptyData);
     _flushTaskToDOM(srcDay, srcTask);
 
-    // Nếu đang move trong cùng tuần, cũng cập nhật DOM ngay
+    // If moving within the same week, also update DOM immediately
     if (targetWeekId === srcWeekId) {
         _writeTaskToState(targetDayIdx, emptyIdx, taskData);
         _flushTaskToDOM(targetDayIdx, emptyIdx);
@@ -1461,7 +1461,7 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
         scheduler.uiUpdate(targetDayIdx);
     }
 
-    // Sync state nguồn và lưu
+    // Sync source state and save
     store.appData.weeks[srcWeekId] = store.appData.weeks[srcWeekId] || { tasks: {}, habits: {}, notes: {} };
     _syncStateFromDOM();
     store.appData.weeks[srcWeekId].tasks = Object.assign({}, store.state.tasks);
@@ -1491,8 +1491,8 @@ function closeSettingsModal() { store.closeModal(); document.getElementById('set
 
 function openMonthlyModal() {
     store.openModal();
-    // Dùng viewingMonthId trực tiếp — không tính lại từ viewingWeekId
-    // vì tuần đầu tháng có thể bắt đầu từ Monday của tháng trước
+    // Use viewingMonthId directly — do not recalculate from viewingWeekId,
+    // because the first week of a month may start on a Monday from the previous month.
     if (!store.viewingMonthId) {
         const parts = store.viewingWeekId.split('-');
         const vDate = new Date(parts[0], parts[1] - 1, parts[2]);
@@ -1513,11 +1513,11 @@ function loadMonthlyData() {
     document.getElementById('monthly-pie-chart').innerHTML  = '';
     document.getElementById('modal-weekly-cols').innerHTML  = '';
 
-    // Lấy dữ liệu theo tháng đang xem
+    // Load data for the currently viewed month
     store.appData.monthly = store.appData.monthly || {};
 
-    // Migration một lần: nếu còn flat keys cũ (mg_1...), migrate vào tháng hiện tại đang xem
-    // Flat keys tồn tại nghĩa là dữ liệu được lưu trước khi có per-month format
+    // One-time migration: if old flat keys (mg_1...) still exist, migrate them into the current viewing month.
+    // Flat keys indicate data saved before the per-month format was introduced.
     const monthly = store.appData.monthly;
     if (monthly['mg_1'] !== undefined || monthly['gr_name_1'] !== undefined) {
         const currentMonthForMigration = store.viewingMonthId;
@@ -1645,8 +1645,9 @@ function switchToWeek(targetWeekId) {
 
 function openMonthPickerModal() {
     store.openModal();
-    // Không tính lại viewingMonthId từ viewingWeekId — tuần đầu tháng có thể bắt đầu từ Monday tháng trước
-    // viewingMonthId đã được set đúng bởi switchToMonth hoặc calculateWeekIds
+    // Do not recalculate viewingMonthId from viewingWeekId — the first week of a month
+    // may start on a Monday from the previous month.
+    // viewingMonthId is set correctly by switchToMonth or calculateWeekIds.
     renderMonthPickerGrid();
     document.getElementById('month-picker-modal').style.display = 'flex';
 }
@@ -1717,7 +1718,7 @@ function switchToMonth(monthId) {
     closeMonthPickerModal();
     generateWeekDates(store.viewingWeekId);
     rebuildUI();
-    // Nếu Monthly Summary modal đang mở, reload dữ liệu theo tháng mới
+    // If the Monthly Summary modal is open, reload data for the new month
     const monthlyModal = document.getElementById('monthly-modal');
     if (monthlyModal && monthlyModal.style.display === 'flex') {
         loadMonthlyData();
@@ -1822,10 +1823,10 @@ function initEventDelegation() {
         saveGlobalData();
     });
 
-    // Auto-scroll khi drag gần mép màn hình
-    // (HTML5 DnD API suppress wheel events trong khi drag — dùng dragover thay thế)
-    const SCROLL_ZONE = 80;   // px từ mép để kích hoạt scroll
-    const SCROLL_SPEED = 12;  // px mỗi frame
+    // Auto-scroll when dragging near screen edges
+    // (HTML5 DnD API suppresses wheel events during drag — use dragover instead)
+    const SCROLL_ZONE = 80;   // px from edge to activate scroll
+    const SCROLL_SPEED = 12;  // px per frame
     let _dragScrollRaf = null;
 
     function _dragAutoScroll(e) {
@@ -1859,8 +1860,12 @@ function initEventDelegation() {
     document.addEventListener('dragend', _stopDragScroll);
 
     // Touch drag & drop fallback for mobile
-    let _touchDragInfo = null;
-    let _touchClone    = null;
+    let _touchDragInfo      = null;
+    let _touchClone         = null;
+    let _touchStartX        = 0;
+    let _touchStartY        = 0;
+    let _touchDragConfirmed = false;
+    let _touchRafHandle     = null;
 
     mainGrid.addEventListener('touchstart', (e) => {
         const cb = e.target.closest('input[type="checkbox"].task-check-trigger');
@@ -1872,52 +1877,99 @@ function initEventDelegation() {
         const nameEl = document.getElementById(`t_name_${dIdx}_${tIdx}`);
         if (!nameEl || !nameEl.value.trim()) return;
 
-        store.draggedTask = { dIdx, tIdx };
-        _touchDragInfo = { dIdx, tIdx, taskItem };
-
-        const rect = taskItem.getBoundingClientRect();
-        _touchClone = taskItem.cloneNode(true);
-        _touchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:0.75;pointer-events:none;z-index:9999;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2);`;
-        document.body.appendChild(_touchClone);
-        taskItem.style.opacity = '0.3';
+        // Record start position and task reference — do NOT create clone yet
+        const touch = e.touches[0];
+        _touchStartX        = touch.clientX;
+        _touchStartY        = touch.clientY;
+        _touchDragConfirmed = false;
+        _touchDragInfo      = { dIdx, tIdx, taskItem };
     }, { passive: true });
 
     document.addEventListener('touchmove', (e) => {
-        if (!_touchDragInfo || !_touchClone) return;
+        if (!_touchDragInfo) return;
         const touch = e.touches[0];
-        const W = window.innerWidth; const H = window.innerHeight;
-        _touchClone.style.left = (touch.clientX - 40) + 'px';
-        _touchClone.style.top  = (touch.clientY - 20) + 'px';
-        // Edge scroll
-        if (touch.clientY < SCROLL_ZONE) window.scrollBy(0, -SCROLL_SPEED);
-        else if (touch.clientY > H - SCROLL_ZONE) window.scrollBy(0, SCROLL_SPEED);
-        if (touch.clientX < SCROLL_ZONE) window.scrollBy(-SCROLL_SPEED, 0);
-        else if (touch.clientX > W - SCROLL_ZONE) window.scrollBy(SCROLL_SPEED, 0);
-    }, { passive: true });
+
+        if (!_touchDragConfirmed) {
+            // Check if movement exceeds 8px threshold to confirm drag
+            const dx = touch.clientX - _touchStartX;
+            const dy = touch.clientY - _touchStartY;
+            if (Math.sqrt(dx * dx + dy * dy) < 8) return; // allow native scroll
+
+            // Confirm drag — create clone now
+            _touchDragConfirmed = true;
+            store.draggedTask = { dIdx: _touchDragInfo.dIdx, tIdx: _touchDragInfo.tIdx };
+            const taskItem = _touchDragInfo.taskItem;
+            const rect = taskItem.getBoundingClientRect();
+            _touchClone = taskItem.cloneNode(true);
+            _touchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:0.75;pointer-events:none;z-index:9999;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2);`;
+            document.body.appendChild(_touchClone);
+            taskItem.style.opacity = '0.3';
+        }
+
+        // Drag is confirmed — suppress scroll and schedule clone position update via rAF
+        e.preventDefault();
+        const clientX = touch.clientX;
+        const clientY = touch.clientY;
+        if (_touchRafHandle) cancelAnimationFrame(_touchRafHandle);
+        _touchRafHandle = requestAnimationFrame(() => {
+            if (!_touchClone) return;
+            const W = window.innerWidth; const H = window.innerHeight;
+            _touchClone.style.left = (clientX - 40) + 'px';
+            _touchClone.style.top  = (clientY - 20) + 'px';
+            // Edge scroll
+            if (clientY < SCROLL_ZONE) window.scrollBy(0, -SCROLL_SPEED);
+            else if (clientY > H - SCROLL_ZONE) window.scrollBy(0, SCROLL_SPEED);
+            if (clientX < SCROLL_ZONE) window.scrollBy(-SCROLL_SPEED, 0);
+            else if (clientX > W - SCROLL_ZONE) window.scrollBy(SCROLL_SPEED, 0);
+            _touchRafHandle = null;
+        });
+    }, { passive: false });
 
     document.addEventListener('touchend', (e) => {
-        if (!_touchDragInfo || !_touchClone) return;
-        const touch = e.changedTouches[0];
-        _touchClone.remove(); _touchClone = null;
-        _touchDragInfo.taskItem.style.opacity = '';
+        if (!_touchDragInfo) return;
 
-        const dropEl = document.elementFromPoint(touch.clientX, touch.clientY);
-        if (dropEl) {
-            const targetTaskItem = dropEl.closest('.task-item');
-            const targetTaskList = dropEl.closest('.task-list');
-            if (targetTaskItem) {
-                const parts = targetTaskItem.id.split('_');
-                dropOnTaskItem(e, parseInt(parts[2]), parseInt(parts[3]));
-            } else if (targetTaskList) {
-                dropTask(e, parseInt(targetTaskList.id.replace('task_list_', '')));
+        // Clear rAF handle
+        if (_touchRafHandle) { cancelAnimationFrame(_touchRafHandle); _touchRafHandle = null; }
+
+        if (_touchDragConfirmed && _touchClone) {
+            const touch = e.changedTouches[0];
+            _touchClone.remove();
+            _touchDragInfo.taskItem.style.opacity = '';
+
+            const dropEl = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (dropEl) {
+                const targetTaskItem = dropEl.closest('.task-item');
+                const targetTaskList = dropEl.closest('.task-list');
+                if (targetTaskItem) {
+                    const parts = targetTaskItem.id.split('_');
+                    dropOnTaskItem(e, parseInt(parts[2]), parseInt(parts[3]));
+                } else if (targetTaskList) {
+                    dropTask(e, parseInt(targetTaskList.id.replace('task_list_', '')));
+                } else {
+                    store.draggedTask = null;
+                }
             } else {
                 store.draggedTask = null;
             }
         } else {
+            // Drag was not confirmed (tap or tiny movement) — restore state
             store.draggedTask = null;
         }
-        _touchDragInfo = null;
+
+        _touchClone         = null;
+        _touchDragInfo      = null;
+        _touchDragConfirmed = false;
     }, { passive: true });
+
+    document.addEventListener('touchcancel', () => {
+        // Reset all drag state to pre-drag values
+        if (_touchRafHandle) { cancelAnimationFrame(_touchRafHandle); _touchRafHandle = null; }
+        if (_touchClone) { _touchClone.remove(); _touchClone = null; }
+        if (_touchDragInfo) { _touchDragInfo.taskItem.style.opacity = ''; }
+        _touchDragInfo      = null;
+        _touchDragConfirmed = false;
+        store.draggedTask   = null;
+    });
 }
 
 function handleDocumentClick(e) {
@@ -1951,7 +2003,7 @@ function handleTaskActionMenuClick(e) {
     const action = item.dataset.action;
     document.getElementById('task-action-menu').style.display = 'none';
     if (action === 'show-mark-submenu') {
-        // Hiện priority-menu tại vị trí task-action-menu đang đứng
+        // Show priority-menu at the same position as task-action-menu
         const actionMenu = document.getElementById('task-action-menu');
         const menu = document.getElementById('priority-menu');
         menu.style.left = actionMenu.style.left;
@@ -1983,22 +2035,22 @@ function handleModalCloseClick(e) {
 function handleMainGridContextMenu(e) {
     const cb = e.target.closest('input[type="checkbox"]');
     if (!cb) return;
-    e.preventDefault(); // chặn browser context menu
+    e.preventDefault(); // prevent browser context menu
     const taskItem = cb.closest('.task-item');
     if (!taskItem) return;
     const parts = taskItem.id.split('_');
     showContextMenu(e, parseInt(parts[2]), parseInt(parts[3]));
 }
 function handleMainGridPointerDown(e) {
-    // Intercept left-click trên checkbox để ngăn toggle — nhưng KHÔNG preventDefault
-    // vì preventDefault trên pointerdown sẽ chặn cả dragstart event
-    // Việc ngăn toggle được xử lý bởi handleMainGridClick (hiện context menu thay vì toggle)
+    // Intercept left-click on checkbox to prevent toggle — but do NOT preventDefault,
+    // because preventDefault on pointerdown would also block the dragstart event.
+    // Toggle prevention is handled by handleMainGridClick (shows context menu instead).
 }
 function handleMainGridClick(e) {
-    // Left-click trên checkbox → hiện task-action-menu (Mark / Move Task)
+    // Left-click on checkbox → show task-action-menu (Mark / Move Task)
     const cb = e.target.closest('input[type="checkbox"].task-check-trigger');
     if (!cb) return;
-    e.preventDefault(); // ngăn checkbox tự toggle — menu sẽ xử lý thay
+    e.preventDefault(); // prevent checkbox from toggling — menu handles it instead
     const taskItem = cb.closest('.task-item');
     if (!taskItem) return;
     const parts = taskItem.id.split('_');

@@ -49,7 +49,6 @@
         <div class="context-menu-item" data-action="show-move-task">📦 Move Task</div>
     </div>
 
-    <!-- Mark submenu (replaces old priority-menu) -->
     <div id="priority-menu" class="context-menu">
         <div class="context-menu-item" data-priority="0"><div class="color-box bg-red"></div> Urgent</div>
         <div class="context-menu-item" data-priority="star">⭐ Starred</div>
@@ -74,7 +73,7 @@
 
     <div class="dashboard-wrapper">
         <div class="grid-container" id="main-grid">
-            
+
             <section class="grid-item wave-chart-container summary-header" aria-label="Weekly performance summary">
                 <div class="summary-header__inner">
                     <header class="summary-header__quote">
@@ -130,13 +129,13 @@
 
                 <div class="widget-title">Habit Tracker</div>
                 <div class="habit-table" id="habit-container"></div>
-                
+
                 <div class="widget-btn-row">
                     <button class="nav-btn nav-btn--full" data-action="open-notes">📝 Notes</button>
                     <button class="nav-btn nav-btn--full" data-action="open-abbr"><span style="color: #A9B4C2; text-shadow: 1px 1px 2px rgba(255,255,255,0.8); font-size: 1.1em;">☁</span> Abbreviations</button>
                 </div>
             </div>
-            
+
         </div>
     </div>
 
@@ -157,8 +156,8 @@
                 <button class="modal-close" data-close="abbr-modal">×</button>
             </div>
             <div class="abbr-header">
-                <div>Viết tắt</div>
-                <div>Nghĩa</div>
+                <div>Abbreviation</div>
+                <div>Meaning</div>
             </div>
             <div id="abbr-container"></div>
         </div>
@@ -171,7 +170,7 @@
                 <button class="nav-btn nav-btn--sm" data-action="open-month-picker">📅 Monthly Basis</button>
                 <button class="modal-close" data-close="monthly-modal">×</button>
             </div>
-            
+
             <div class="monthly-section">
                 <div class="monthly-section-title">Monthly Goals</div>
                 <div class="goals-list">
@@ -191,7 +190,7 @@
                     <div class="monthly-section-title">Weekly Performance</div>
                     <div id="monthly-bar-chart" class="monthly-chart-area"></div>
                 </div>
-                
+
                 <div class="monthly-section monthly-charts__habits">
                     <div class="monthly-section-title">Habit Chart</div>
                     <div id="monthly-pie-chart" class="monthly-chart-area--pie"></div>
@@ -228,7 +227,9 @@
                             <td><input type="text" id="gr-actual-2" placeholder="..."></td>
                             <td>
                                 <select id="gr-status-2">
-                                    <option value="Pending">Pending</option><option value="Achieved">Achieved</option><option value="Missed">Missed</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Achieved">Achieved</option>
+                                    <option value="Missed">Missed</option>
                                 </select>
                             </td>
                         </tr>
@@ -238,7 +239,9 @@
                             <td><input type="text" id="gr-actual-3" placeholder="..."></td>
                             <td>
                                 <select id="gr-status-3">
-                                    <option value="Pending">Pending</option><option value="Achieved">Achieved</option><option value="Missed">Missed</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Achieved">Achieved</option>
+                                    <option value="Missed">Missed</option>
                                 </select>
                             </td>
                         </tr>
