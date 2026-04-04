@@ -946,12 +946,9 @@ function showContextMenu(e, dIdx, tIdx) {
             toggleItem.innerHTML = '✅ Complete';
         }
     }
-    // Position menu relative to the checkbox element
-    const rect = cb ? cb.getBoundingClientRect() : null;
-    const menuX = rect ? (rect.left + window.scrollX) : (e.clientX + window.scrollX);
-    const menuY = rect ? (rect.bottom + window.scrollY + 4) : (e.clientY + window.scrollY);
-    menu.style.left = menuX + 'px';
-    menu.style.top  = menuY + 'px';
+    // Position menu just below the cursor (~0.4 task height offset)
+    menu.style.left = e.clientX + 'px';
+    menu.style.top  = (e.clientY + 15) + 'px';
     menu.style.display = 'block';
     store.setRightClick(dIdx, tIdx);
     // Hide priority-menu if currently visible
