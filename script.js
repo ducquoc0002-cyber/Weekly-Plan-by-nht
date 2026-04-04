@@ -909,56 +909,9 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
 // 11. TASK LOGIC
 function autoResizeTextarea(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
 
-/**
- * Called on every input event for a task name textarea.
- * If the textarea is wrapping (multi-line), try to reclaim space by hiding
- * the last truly-empty task slot in the same day column.
- * If no empty slot is available, the card grows naturally — CSS grid will
- * stretch all sibling cards in the same row to match.
- * Single-line textareas never trigger slot removal.
- */
 function smartExpandTask(dIdx) {
-    // Collect all task items for this day
-    const items = [];
-    for (let t = 0; t < TASKS_PER_DAY; t++) {
-        const div  = document.getElementById(`task_div_${dIdx}_${t}`);
-        const name = document.getElementById(`t_name_${dIdx}_${t}`);
-        const cb   = document.getElementById(`t_check_${dIdx}_${t}`);
-        if (div && name && cb) items.push({ div, name, cb, t });
-    }
-
-    // Count how many visible slots are currently hidden (already reclaimed)
-    const hiddenCount = items.filter(({ div }) => div.classList.contains('task-item--hidden')).length;
-
-    // Check if any visible textarea is actually wrapping (height > single line ~22px)
-    const singleLineH = 22; // approximate px height of one line
-    const anyWrapping = items.some(({ name, div }) =>
-        !div.classList.contains('task-item--hidden') && name.offsetHeight > singleLineH
-    );
-
-    if (!anyWrapping) {
-        // Nothing is wrapping — restore all hidden slots back to visible
-        items.forEach(({ div }) => div.classList.remove('task-item--hidden'));
-        return;
-    }
-
-    // Find the last visible slot that is completely empty (no text, unchecked, default priority/delay)
-    let lastEmptyIdx = -1;
-    for (let i = items.length - 1; i >= 0; i--) {
-        const { div, name, cb } = items[i];
-        if (div.classList.contains('task-item--hidden')) continue; // already hidden
-        const isEmpty = name.value.trim() === '' &&
-                        !cb.checked &&
-                        (div.getAttribute('data-priority') === '3' || div.getAttribute('data-priority') === null) &&
-                        (div.getAttribute('data-delay') === '0' || div.getAttribute('data-delay') === null);
-        if (isEmpty) { lastEmptyIdx = i; break; }
-    }
-
-    if (lastEmptyIdx !== -1) {
-        // Hide the last empty slot to reclaim its height
-        items[lastEmptyIdx].div.classList.add('task-item--hidden');
-    }
-    // If no empty slot found: card grows naturally, CSS grid row stretches all siblings
+    // No-op: slot hiding on text wrap has been removed.
+    // Cards grow naturally when task names wrap to multiple lines.
 }
 
 function formatTimeInput(el) {

@@ -44,6 +44,7 @@
 input, textarea, select, button { font-family: var(--font-main); outline: none; }
 
 body { 
+    zoom: 1.1;
     font-family: var(--font-main); 
     background-color: #F8F6F0;
     background-image:
