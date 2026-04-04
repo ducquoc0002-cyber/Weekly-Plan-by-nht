@@ -1,13 +1,9 @@
-﻿﻿// ============================================================
-// WEEKLY PLAN DASHBOARD — script.js
+﻿﻿/// Weekly Plan Dashboard — script.js
 // Architecture: IIFE module with centralized state store
-// ============================================================
 (function () {
 'use strict';
 
-// ============================================================
-// 1. SUPABASE CLIENT (credentials from config.js)
-// ============================================================
+// 1. SUPABASE CLIENT
 let sbClient;
 try {
     sbClient = window.supabase.createClient(
@@ -18,9 +14,7 @@ try {
     console.error('[APP] Supabase init failed — config.js may not have loaded:', err);
 }
 
-// ============================================================
-// 2. CONSTANTS (immutable config)
-// ============================================================
+// 2. CONSTANTS
 const DAYS_DATA = [
     { name: "Monday",    bg: "var(--day-yellow)", stroke: "var(--stroke-yellow)" },
     { name: "Tuesday",   bg: "var(--day-green)",  stroke: "var(--stroke-green)"  },
@@ -35,11 +29,7 @@ const TASKS_PER_DAY = 10;
 const HABITS_COUNT  = 5;
 const SVG_NS        = 'http://www.w3.org/2000/svg';
 
-// ============================================================
 // 3. CENTRALIZED STATE STORE
-// All mutable state lives here. External code reads/writes
-// only through the exported API (store.*).
-// ============================================================
 const store = (() => {
     let _currentUser      = null;
     let _appData          = { weeks: {}, monthly: {}, abbrs: {} };
@@ -104,9 +94,7 @@ const store = (() => {
     };
 })();
 
-// ============================================================
 // 4. DEBOUNCE / THROTTLE CENTRE
-// ============================================================
 const scheduler = (() => {
     let _uiTimer  = null;
     let _saveTimer = null;
@@ -114,7 +102,7 @@ const scheduler = (() => {
 
     return {
         /** Schedule a single rAF-batched UI update for one day column */
-        uiUpdate(dIdx) {
+    uiUpdate(dIdx) {
             if (_uiTimer) cancelAnimationFrame(_uiTimer);
             _uiTimer = requestAnimationFrame(() => {
                 updateDay(dIdx);
@@ -137,9 +125,7 @@ const scheduler = (() => {
 })();
 
 
-// ============================================================
 // 5. STATE HELPERS
-// ============================================================
 function _stateSetTask(d, t, field, value) {
     store.state.tasks[`t_${field}_${d}_${t}`] = value;
 }
@@ -179,9 +165,7 @@ function _syncStateFromDOM() {
     }
 }
 
-// ============================================================
 // 6. AUTH & DATA PERSISTENCE
-// ============================================================
 async function checkAuth() {
     try {
         const { data: { session } } = await sbClient.auth.getSession();
@@ -379,9 +363,7 @@ function saveAbbrData() {
 }
 
 
-// ============================================================
 // 7. DATE / WEEK UTILITIES
-// ============================================================
 function getMonday(d) {
     const date = new Date(d);
     const day  = date.getDay();
@@ -437,9 +419,7 @@ function getMonthWeeks() {
     return blocks;
 }
 
-// ============================================================
 // 8. INIT & LIFECYCLE
-// ============================================================
 window.onload = () => {
     // Attach auth listener immediately on page load, before login completes
     document.getElementById('auth-overlay').addEventListener('click', handleAuthClick);
@@ -566,9 +546,7 @@ function renameUser(e) {
     }
 }
 
-// ============================================================
 // 9. DOM RENDERING (DocumentFragment)
-// ============================================================
 function _createNoteRow(i) {
     const row   = document.createElement('div');
     row.className = 'note-row';
@@ -808,10 +786,7 @@ function renderDays() {
 }
 
 
-// ============================================================
 // 10. DRAG & DROP — state-first approach
-// Swap data in _state first, then write to DOM once, then sort.
-// ============================================================
 function dragStartTask(e, dIdx, tIdx) {
     if (document.getElementById(`t_name_${dIdx}_${tIdx}`).value.trim() === '') { e.preventDefault(); return; }
     store.draggedTask = { dIdx, tIdx };
@@ -838,25 +813,21 @@ function _readTaskFromState(d, t) {
 /** Write a task data object into _state */
 function _writeTaskToState(d, t, data) {
     const s = store.state.tasks;
-    s[`t_name_${d}_${t}`]    = data.name;
-    s[`t_h_start_${d}_${t}`] = data.hStart;
-    s[`t_m_start_${d}_${t}`] = data.mStart;
-    s[`t_h_end_${d}_${t}`]   = data.hEnd;
-    s[`t_m_end_${d}_${t}`]   = data.mEnd;
-    s[`t_check_${d}_${t}`]   = data.checked;
-    s[`t_pri_${d}_${t}`]     = data.pri;
-    s[`t_delay_${d}_${t}`]   = data.delay;
+    const fields = { name: 'name', hStart: 'h_start', mStart: 'm_start', hEnd: 'h_end', mEnd: 'm_end' };
+    for (const [prop, key] of Object.entries(fields)) s[`t_${key}_${d}_${t}`] = data[prop];
+    s[`t_check_${d}_${t}`] = data.checked;
+    s[`t_pri_${d}_${t}`]   = data.pri;
+    s[`t_delay_${d}_${t}`] = data.delay;
 }
 
 /** Flush one task from _state to DOM */
 function _flushTaskToDOM(d, t) {
     const s = store.state.tasks;
-    document.getElementById(`t_name_${d}_${t}`).value    = s[`t_name_${d}_${t}`]    || '';
-    document.getElementById(`t_h_start_${d}_${t}`).value = s[`t_h_start_${d}_${t}`] || '';
-    document.getElementById(`t_m_start_${d}_${t}`).value = s[`t_m_start_${d}_${t}`] || '';
-    document.getElementById(`t_h_end_${d}_${t}`).value   = s[`t_h_end_${d}_${t}`]   || '';
-    document.getElementById(`t_m_end_${d}_${t}`).value   = s[`t_m_end_${d}_${t}`]   || '';
-    document.getElementById(`t_check_${d}_${t}`).checked = s[`t_check_${d}_${t}`]   || false;
+    const fields = { name: 'name', h_start: 'hStart', m_start: 'mStart', h_end: 'hEnd', m_end: 'mEnd' };
+    for (const [key, prop] of Object.entries(fields)) {
+        document.getElementById(`t_${key}_${d}_${t}`).value = s[`t_${key}_${d}_${t}`] || '';
+    }
+    document.getElementById(`t_check_${d}_${t}`).checked = s[`t_check_${d}_${t}`] || false;
     const div = document.getElementById(`task_div_${d}_${t}`);
     div.setAttribute('data-priority', s[`t_pri_${d}_${t}`]   || '3');
     div.setAttribute('data-delay',    s[`t_delay_${d}_${t}`] || '0');
@@ -935,9 +906,7 @@ function dropOnTaskItem(e, targetDayIdx, targetTaskIdx) {
     }
 }
 
-// ============================================================
 // 11. TASK LOGIC
-// ============================================================
 function autoResizeTextarea(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
 
 /**
@@ -1024,11 +993,10 @@ function showContextMenu(e, dIdx, tIdx) {
             toggleItem.innerHTML = '✅ Complete';
         }
     }
-    // Position menu relative to the checkbox element, accounting for CSS zoom
-    const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
+    // Position menu relative to the checkbox element
     const rect = cb ? cb.getBoundingClientRect() : null;
-    const menuX = rect ? (rect.left + window.scrollX / zoom) : (e.clientX / zoom + window.scrollX / zoom);
-    const menuY = rect ? (rect.bottom / zoom + window.scrollY / zoom + 4) : (e.clientY / zoom + window.scrollY / zoom);
+    const menuX = rect ? (rect.left + window.scrollX) : (e.clientX + window.scrollX);
+    const menuY = rect ? (rect.bottom + window.scrollY + 4) : (e.clientY + window.scrollY);
     menu.style.left = menuX + 'px';
     menu.style.top  = menuY + 'px';
     menu.style.display = 'block';
@@ -1146,9 +1114,7 @@ function updateRowStatus(id) {
 }
 
 
-// ============================================================
-// 12. SVG CHARTS — createElementNS (no innerHTML string building)
-// ============================================================
+// 12. SVG CHARTS
 function svgEl(tag, attrs) {
     const el = document.createElementNS(SVG_NS, tag);
     for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
@@ -1282,9 +1248,7 @@ function drawPieChart(container, habitStats) {
 }
 
 
-// ============================================================
 // 13. MOVE TASK FEATURE
-// ============================================================
 
 /** Open Move Task modal with month picker */
 function openMoveTaskModal(dIdx, tIdx) {
@@ -1487,9 +1451,7 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
     closeMoveTaskModal();
 }
 
-// ============================================================
 // 14. MODAL LOGIC
-// ============================================================
 function openNoteModal() {
     store.openModal();
     document.getElementById('note-modal').style.display = 'flex';
@@ -1632,9 +1594,7 @@ function loadMonthlyData() {
     drawPieChart(document.getElementById('monthly-pie-chart'), habitStats);
 }
 
-// ============================================================
 // 14. WEEK / MONTH NAVIGATION
-// ============================================================
 function switchToWeek(targetWeekId) {
     _syncStateFromDOM(); saveData();
     const p = targetWeekId.split('-');
@@ -1741,9 +1701,7 @@ function switchToMonth(monthId) {
 }
 
 
-// ============================================================
 // 15. TOOLTIP (throttled mousemove)
-// ============================================================
 function escapeHtml(str) {
     return String(str)
         .replace(/&/g, '&amp;')
@@ -1786,9 +1744,7 @@ document.addEventListener('mousemove', e => {
     });
 });
 
-// ============================================================
 // 16. EVENT DELEGATION
-// ============================================================
 function initEventDelegation() {
     document.addEventListener('click',       handleDocumentClick);
     document.addEventListener('contextmenu', handleDocumentContextMenu);
@@ -2149,10 +2105,7 @@ function handleMonthlyModalChange(e) {
     saveMonthly();
 }
 
-// ============================================================
 // TEST HOOKS — expose internals for property-based testing
-// Used by tests/bug-condition.test.html and tests/preservation.test.html.
-// ============================================================
 window.store        = store;
 window.escapeHtml   = escapeHtml;
 window.showTooltip  = showTooltip;
@@ -2173,8 +2126,7 @@ window.closeMonthlyModal   = closeMonthlyModal;
 window.openMonthPickerModal  = openMonthPickerModal;
 window.closeMonthPickerModal = closeMonthPickerModal;
 
-// Legacy aliases used by preservation.test.html (performance-optimization style)
-// These proxy to store properties so tests can read/write them directly.
+// Legacy aliases for preservation.test.html
 Object.defineProperty(window, 'appData', {
     get() { return store.appData; },
     set(v) { store.appData = v; },
@@ -2201,9 +2153,7 @@ Object.defineProperty(window, 'activeModalCount', {
     configurable: true
 });
 
-// ============================================================
 // Close IIFE
-// ============================================================
 })();
 
 
