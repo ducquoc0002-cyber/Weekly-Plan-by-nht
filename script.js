@@ -947,8 +947,10 @@ function showContextMenu(e, dIdx, tIdx) {
         }
     }
     // Position menu just below the cursor (~0.4 task height offset)
-    menu.style.left = e.clientX + 'px';
-    menu.style.top  = (e.clientY + 15) + 'px';
+    // Compensate for body zoom so coordinates map correctly to fixed positioning
+    const zoom = parseFloat(document.body.style.zoom) || 1;
+    menu.style.left = (e.clientX / zoom) + 'px';
+    menu.style.top  = (e.clientY / zoom + 15) + 'px';
     menu.style.display = 'block';
     store.setRightClick(dIdx, tIdx);
     // Hide priority-menu if currently visible
@@ -1651,7 +1653,7 @@ function switchToMonth(monthId) {
 }
 
 
-// 15. TOOLTIP (throttled mousemove)
+// 15. TOOLTIP — show meaning only when hovering the exact abbreviation word
 function escapeHtml(str) {
     return String(str)
         .replace(/&/g, '&amp;')
@@ -1661,36 +1663,67 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
+function _getAbbrMap() {
+    const map = {};
+    const count = store.appData.abbrsCount || 10;
+    for (let i = 1; i <= count; i++) {
+        const k = (store.appData.abbrs?.[`abbr_k_${i}`] || '').trim();
+        const v = (store.appData.abbrs?.[`abbr_v_${i}`] || '').trim();
+        if (k && v) map[k.toLowerCase()] = { key: k, val: v };
+    }
+    return map;
+}
+
+function _wordAtOffset(text, offset) {
+    if (offset < 0 || offset > text.length) return null;
+    let start = offset, end = offset;
+    while (start > 0 && /\w/.test(text[start - 1])) start--;
+    while (end < text.length && /\w/.test(text[end])) end++;
+    if (start === end) return null;
+    return text.slice(start, end);
+}
+
+function _getCaretOffsetFromPoint(textarea, clientX, clientY) {
+    if (document.caretRangeFromPoint) {
+        const range = document.caretRangeFromPoint(clientX, clientY);
+        if (!range) return -1;
+        if (!textarea.contains(range.startContainer) && range.startContainer !== textarea) return -1;
+        return range.startOffset;
+    }
+    if (document.caretPositionFromPoint) {
+        const pos = document.caretPositionFromPoint(clientX, clientY);
+        if (pos) return pos.offset;
+    }
+    return -1;
+}
+
 let _tooltipThrottle = null;
 document.addEventListener('mousemove', e => {
     const tooltip = document.getElementById('abbr-tooltip');
-    if (!e.target || !e.target.classList.contains('t-name')) {
-        if (tooltip) tooltip.style.display = 'none';
+    if (!tooltip) return;
+    const target = e.target;
+    if (!target || !target.classList.contains('t-name')) {
+        tooltip.style.display = 'none';
         return;
     }
     if (_tooltipThrottle) return;
     _tooltipThrottle = requestAnimationFrame(() => {
         _tooltipThrottle = null;
-        const target = e.target;
-        if (!target || !target.classList.contains('t-name')) { tooltip.style.display = 'none'; return; }
         const text = target.value;
         if (!text) { tooltip.style.display = 'none'; return; }
-        const foundAbbrs = [];
-        const abbrCount = store.appData.abbrsCount || 10;
-        for (let i = 1; i <= abbrCount; i++) {
-            const k = store.appData.abbrs?.[`abbr_k_${i}`];
-            const v = store.appData.abbrs?.[`abbr_v_${i}`];
-            const safeK = k ? k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
-            if (k && v && new RegExp(`\\b${safeK}\\b`, 'i').test(text)) {
-                foundAbbrs.push(`<b>${escapeHtml(k)}</b>: ${escapeHtml(v)}`);
-            }
-        }
-        if (foundAbbrs.length > 0) {
-            tooltip.innerHTML = foundAbbrs.join('<br>');
-            tooltip.style.display = 'block';
-            tooltip.style.left = (e.clientX + window.scrollX) + 'px';
-            tooltip.style.top  = (e.clientY + window.scrollY + 20) + 'px';
-        } else { tooltip.style.display = 'none'; }
+        const abbrMap = _getAbbrMap();
+        if (Object.keys(abbrMap).length === 0) { tooltip.style.display = 'none'; return; }
+        const offset = _getCaretOffsetFromPoint(target, e.clientX, e.clientY);
+        if (offset < 0) { tooltip.style.display = 'none'; return; }
+        const word = _wordAtOffset(text, offset);
+        if (!word) { tooltip.style.display = 'none'; return; }
+        const entry = abbrMap[word.toLowerCase()];
+        if (!entry) { tooltip.style.display = 'none'; return; }
+        const zoom = parseFloat(document.body.style.zoom) || 1;
+        tooltip.innerHTML = `<b>${escapeHtml(entry.key)}</b>: ${escapeHtml(entry.val)}`;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX / zoom) + 'px';
+        tooltip.style.top  = (e.clientY / zoom + 18) + 'px';
     });
 });
 
