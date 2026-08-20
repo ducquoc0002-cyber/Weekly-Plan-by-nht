@@ -1,4 +1,4 @@
-﻿﻿/// Weekly Plan Dashboard — script.js
+﻿/// Weekly Plan Dashboard — script.js
 // Architecture: IIFE module with centralized state store
 (function () {
 'use strict';
@@ -33,7 +33,7 @@ const SVG_NS        = 'http://www.w3.org/2000/svg';
 const store = (() => {
     let _currentUser      = null;
     let _appData          = { weeks: {}, monthly: {}, abbrs: {} };
-    let _state            = { tasks: {}, habits: {}, notes: {} };
+        let _state            = { tasks: {}, habits: {} };
     let _currentRealWeekId = '';
     let _viewingWeekId    = '';
     let _viewingMonthId   = '';
@@ -57,7 +57,7 @@ const store = (() => {
         set appData(v)         { _appData = v; },
         // _state (in-memory DOM mirror)
         get state()            { return _state; },
-        resetState()           { const prev = _state; _state = { tasks: {}, habits: {}, notes: {}, notesCount: prev?.notesCount || 10 }; },
+        resetState()           { _state = { tasks: {}, habits: {} }; },
         // week/month IDs
         get currentRealWeekId()     { return _currentRealWeekId; },
         set currentRealWeekId(v)    { _currentRealWeekId = v; },
@@ -159,10 +159,6 @@ function _syncStateFromDOM() {
             s.habits[`h_check_${h}_${d}`] = (document.getElementById(`h_check_${h}_${d}`) || {}).checked || false;
         }
     }
-    for (let i = 1; i <= (store.state.notesCount || 10); i++) {
-        const el = document.getElementById(`note_input_${i}`);
-        s.notes[`note_${i}`] = el ? el.value : '';
-    }
 }
 
 // 6. AUTH & DATA PERSISTENCE
@@ -248,7 +244,8 @@ async function loadGlobalDataFromDB() {
     if (!d.weeks)   d.weeks   = {};
     if (!d.monthly) d.monthly = {};
     if (!d.abbrs)   d.abbrs   = {};
-    if (!d.settings) d.settings = { persistentNotes: false, persistentAbbr: false, persistentHabit: false, language: 'en' };}
+    if (!d.settings) d.settings = { persistentAbbr: false, persistentHabit: false, language: 'en' };
+}
 
 function saveGlobalData() {
     localStorage.setItem('plan_app_data', JSON.stringify(store.appData));
@@ -276,16 +273,14 @@ function saveData() {
     _syncStateFromDOM();
     const s = store.state;
     store.appData.weeks[store.viewingWeekId] = {
-        tasks:      Object.assign({}, s.tasks),
-        habits:     Object.assign({}, s.habits),
-        notes:      Object.assign({}, s.notes),
-        notesCount: s.notesCount || 10
+        tasks:  Object.assign({}, s.tasks),
+        habits: Object.assign({}, s.habits)
     };
     saveGlobalData();
 }
 
 function loadWeekData() {
-    const wData = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {}, notes: {} };
+    const wData = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {} };
     // Restore all task slots to visible before populating (default: 10 slots shown)
     for (let d = 0; d < 7; d++) {
         for (let t = 0; t < TASKS_PER_DAY; t++) {
@@ -315,13 +310,6 @@ function loadWeekData() {
         for (let d = 0; d < 7; d++) {
             document.getElementById(`h_check_${h}_${d}`).checked = wData.habits[`h_check_${h}_${d}`] || false;
         }
-    }
-    // Sync notes count from saved data into state, then populate values
-    const targetCount = Math.max(10, wData.notesCount || 10);
-    store.state.notesCount = targetCount;
-    for (let i = 1; i <= targetCount; i++) {
-        const el = document.getElementById(`note_input_${i}`);
-        if (el) { el.value = wData.notes?.[`note_${i}`] || ''; autoResizeTextarea(el); }
     }
     _syncStateFromDOM();
     // Defer task resize until after layout is painted so scrollHeight is accurate
@@ -430,13 +418,12 @@ function continueInit() {
     calculateWeekIds();
     store.viewingWeekId = store.currentRealWeekId;
     if (!store.appData.weeks[store.viewingWeekId]) {
-        store.appData.weeks[store.viewingWeekId] = { tasks: {}, habits: {}, notes: {} };
+        store.appData.weeks[store.viewingWeekId] = { tasks: {}, habits: {} };
         _applyPersistentData(store.viewingWeekId);
     }
     const savedName = localStorage.getItem('dashboard_username') || 'Name';
     document.getElementById('greeting-text').innerText = `Hi ${savedName} !!`;
 
-    initNotesUI();
     initAbbrUI();
     renderCalendar();
     renderHabits();
@@ -450,7 +437,6 @@ function continueInit() {
 
 function initSettingsUI() {
     const s = store.appData.settings || {};
-    document.getElementById('setting-persistent-notes').checked = !!s.persistentNotes;
     document.getElementById('setting-persistent-abbr').checked  = !!s.persistentAbbr;
     document.getElementById('setting-persistent-habit').checked = !!s.persistentHabit;
     document.getElementById('setting-language').value           = s.language || 'en';
@@ -486,10 +472,6 @@ function _applyPersistentData(targetWeekId) {
         if (!lastId) return;
         const src = store.appData.weeks[lastId];
         const dst = store.appData.weeks[targetWeekId];
-        if (s.persistentNotes && src.notes) {
-            dst.notes = JSON.parse(JSON.stringify(src.notes));
-            dst.notesCount = src.notesCount || 10;
-        }
         if (s.persistentAbbr && store.appData.abbrs) {
             // abbrs are global — no per-week copy needed
         }
@@ -509,10 +491,6 @@ function _applyPersistentData(targetWeekId) {
 function rebuildUI() {
     document.getElementById('main-grid').querySelectorAll('.grid-item:nth-child(n+3)').forEach(e => e.remove());
     renderDays();
-    // Sync notesCount from new week's data before rebuilding notes UI
-    const wData = store.appData.weeks[store.viewingWeekId] || {};
-    store.state.notesCount = Math.max(10, wData.notesCount || 10);
-    initNotesUI();
     loadWeekData();
     updateAll();
 }
@@ -547,55 +525,6 @@ function renameUser(e) {
 }
 
 // 9. DOM RENDERING (DocumentFragment)
-function _createNoteRow(i) {
-    const row   = document.createElement('div');
-    row.className = 'note-row';
-    const label = document.createElement('label');
-    label.textContent = `${i}.`;
-    const input = document.createElement('textarea');
-    input.id    = `note_input_${i}`;
-    input.placeholder = '...';
-    input.rows  = 1;
-    input.addEventListener('input', () => autoResizeTextarea(input));
-    row.appendChild(label);
-    row.appendChild(input);
-    return row;
-}
-
-function initNotesUI() {
-    const container = document.getElementById('notes-container');
-    container.innerHTML = '';
-    const count = store.state.notesCount || 10;
-    const fragment = document.createDocumentFragment();
-    for (let i = 1; i <= count; i++) {
-        fragment.appendChild(_createNoteRow(i));
-    }
-    // Add "+" button row
-    const addRow = document.createElement('div');
-    addRow.className = 'note-add-row';
-    const addBtn = document.createElement('button');
-    addBtn.className = 'note-add-btn';
-    addBtn.textContent = '+';
-    addBtn.title = 'Add note';
-    addBtn.addEventListener('click', addNoteRow);
-    addRow.appendChild(addBtn);
-    fragment.appendChild(addRow);
-    container.appendChild(fragment);
-}
-
-function addNoteRow() {
-    const container = document.getElementById('notes-container');
-    const addRow = container.querySelector('.note-add-row');
-    const currentCount = container.querySelectorAll('.note-row').length;
-    const newIdx = currentCount + 1;
-    store.state.notesCount = newIdx;
-    const row = _createNoteRow(newIdx);
-    container.insertBefore(row, addRow);
-    container.scrollTop = container.scrollHeight;
-    document.getElementById(`note_input_${newIdx}`).focus();
-    saveData(); // persist notesCount immediately
-}
-
 function _createAbbrRow(i) {
     const row    = document.createElement('div');
     row.className = 'abbr-row';
@@ -1346,7 +1275,7 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
 
     // Ensure the target week exists
     if (!store.appData.weeks[targetWeekId]) {
-        store.appData.weeks[targetWeekId] = { tasks: {}, habits: {}, notes: {} };
+        store.appData.weeks[targetWeekId] = { tasks: {}, habits: {} };
         _applyPersistentData(targetWeekId);
     }
 
@@ -1393,7 +1322,7 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
     }
 
     // Sync source state and save
-    store.appData.weeks[srcWeekId] = store.appData.weeks[srcWeekId] || { tasks: {}, habits: {}, notes: {} };
+    store.appData.weeks[srcWeekId] = store.appData.weeks[srcWeekId] || { tasks: {}, habits: {} };
     _syncStateFromDOM();
     store.appData.weeks[srcWeekId].tasks = Object.assign({}, store.state.tasks);
     sortTasks(srcDay);
@@ -1404,15 +1333,6 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
 }
 
 // 14. MODAL LOGIC
-function openNoteModal() {
-    store.openModal();
-    document.getElementById('note-modal').style.display = 'flex';
-    // Re-run resize now that the modal is visible (scrollHeight was 0 while hidden)
-    requestAnimationFrame(() => {
-        document.querySelectorAll('#notes-container textarea').forEach(autoResizeTextarea);
-    });
-}
-function closeNoteModal()   { store.closeModal(); document.getElementById('note-modal').style.display = 'none'; }
 function openAbbrModal()    { store.openModal(); document.getElementById('abbr-modal').style.display = 'flex'; }
 function closeAbbrModal()   { store.closeModal(); document.getElementById('abbr-modal').style.display = 'none'; }
 function openSettingsModal()  { store.openModal(); document.getElementById('settings-modal').style.display = 'flex'; }
@@ -1562,7 +1482,7 @@ function switchToWeek(targetWeekId) {
         title.innerText = `${monthNames[d.getMonth()].toUpperCase()} ${d.getFullYear()}`;
     }
     if (!store.appData.weeks[store.viewingWeekId]) {
-        store.appData.weeks[store.viewingWeekId] = { tasks: {}, habits: {}, notes: {} };
+        store.appData.weeks[store.viewingWeekId] = { tasks: {}, habits: {} };
         _applyPersistentData(store.viewingWeekId);
     }
     closeMonthlyModal();
@@ -1627,7 +1547,7 @@ function switchToMonth(monthId) {
     const mondayOfFirst   = getMonday(firstOfMonth);
     const targetWeekId    = formatDateKey(mondayOfFirst);
     if (!store.appData.weeks[targetWeekId]) {
-        store.appData.weeks[targetWeekId] = { tasks: {}, habits: {}, notes: {} };
+        store.appData.weeks[targetWeekId] = { tasks: {}, habits: {} };
         _applyPersistentData(targetWeekId);
     }
     store.viewingMonthId = monthId;
@@ -1741,7 +1661,6 @@ function initEventDelegation() {
 
     // Task action menu (Mark / Move Task)
     document.getElementById('task-action-menu').addEventListener('click', handleTaskActionMenuClick);
-    document.addEventListener('change', handleNotesChange);
     document.addEventListener('change', handleAbbrChange);
     document.addEventListener('change', handleMonthlyModalChange);
 
@@ -1765,9 +1684,9 @@ function initEventDelegation() {
     habitContainer.addEventListener('input',  handleHabitInput);
 
     // Settings toggles & language
-    ['setting-persistent-notes', 'setting-persistent-abbr', 'setting-persistent-habit'].forEach(id => {
+    ['setting-persistent-abbr', 'setting-persistent-habit'].forEach(id => {
         document.getElementById(id).addEventListener('change', (e) => {
-            const keyMap = { 'setting-persistent-notes': 'persistentNotes', 'setting-persistent-abbr': 'persistentAbbr', 'setting-persistent-habit': 'persistentHabit' };
+            const keyMap = { 'setting-persistent-abbr': 'persistentAbbr', 'setting-persistent-habit': 'persistentHabit' };
             store.appData.settings[keyMap[id]] = e.target.checked;
             saveGlobalData();
         });
@@ -1947,7 +1866,6 @@ function handleTopNavClick(e) {
     if (a === 'open-monthly')           openMonthlyModal();
     else if (a === 'open-month-picker') openMonthPickerModal();
     else if (a === 'logout')            handleLogout();
-    else if (a === 'open-notes')        openNoteModal();
     else if (a === 'open-abbr')         openAbbrModal();
     else if (a === 'open-settings')     openSettingsModal();
 }
@@ -1983,8 +1901,7 @@ function handleModalCloseClick(e) {
     const btn = e.target.closest('[data-close]');
     if (!btn) return;
     const id = btn.dataset.close;
-    if (id === 'note-modal')              closeNoteModal();
-    else if (id === 'abbr-modal')         closeAbbrModal();
+    if (id === 'abbr-modal')         closeAbbrModal();
     else if (id === 'monthly-modal')      closeMonthlyModal();
     else if (id === 'month-picker-modal') closeMonthPickerModal();
     else if (id === 'settings-modal')     closeSettingsModal();
@@ -2070,11 +1987,6 @@ function handleHabitInput(e) {
         autoResizeTextarea(e.target); store.state.habits[e.target.id] = e.target.value;
     }
 }
-function handleNotesChange(e) {
-    if (!e.target.id || !e.target.id.startsWith('note_input_')) return;
-    store.state.notes[`note_${e.target.id.replace('note_input_', '')}`] = e.target.value;
-    scheduler.save();
-}
 function handleAbbrChange(e) {
     if (!e.target.id || (!e.target.id.startsWith('abbr_k_') && !e.target.id.startsWith('abbr_v_'))) return;
     saveAbbrData();
@@ -2098,10 +2010,7 @@ window.sortTasks    = sortTasks;
 window.saveData     = saveData;
 window.loadWeekData = loadWeekData;
 window.calculateWeekIds = calculateWeekIds;
-window.openNoteModal    = openNoteModal;
-window.addNoteRow       = addNoteRow;
 window.addAbbrRow       = addAbbrRow;
-window.closeNoteModal   = closeNoteModal;
 window.openAbbrModal    = openAbbrModal;
 window.closeAbbrModal   = closeAbbrModal;
 window.openMonthlyModal    = openMonthlyModal;
