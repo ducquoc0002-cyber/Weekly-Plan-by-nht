@@ -192,10 +192,40 @@ function _syncStateFromDOM() {
     }
 }
 
-/** Number of note rows for the week currently in view */
+/** Number of note rows — notes are global, shared by every week and month */
 function _getNotesCount() {
-    const wData = store.appData.weeks[store.viewingWeekId];
-    return Math.max(NOTES_COUNT, (wData && wData.notesCount) || 0);
+    return Math.max(NOTES_COUNT, store.appData.notesCount || 0);
+}
+
+/**
+ * Merge notes that older versions stored per week into the global note list.
+ * Runs once: afterwards `appData.notes` exists and weeks keep no notes.
+ */
+function _migrateWeekNotesToGlobal() {
+    const d = store.appData;
+    const alreadyGlobal = !!d.notes;
+    d.notes = d.notes || {};
+    const merged = [];
+    for (let i = 1; i <= (d.notesCount || NOTES_COUNT); i++) {
+        const v = (d.notes[`note_${i}`] || '').trim();
+        if (v) merged.push(v);
+    }
+    let hadWeekNotes = false;
+    Object.keys(d.weeks || {}).sort().forEach(weekId => {
+        const wData = d.weeks[weekId];
+        if (!wData || !wData.notes) return;
+        hadWeekNotes = true;
+        for (let i = 1; i <= (wData.notesCount || NOTES_COUNT); i++) {
+            const v = (wData.notes[`note_${i}`] || '').trim();
+            if (v && !merged.includes(v)) merged.push(v);
+        }
+        delete wData.notes;
+        delete wData.notesCount;
+    });
+    if (alreadyGlobal && !hadWeekNotes) return;
+    d.notes = {};
+    merged.forEach((v, idx) => { d.notes[`note_${idx + 1}`] = v; });
+    d.notesCount = Math.max(NOTES_COUNT, merged.length);
 }
 
 // 6. AUTH & DATA PERSISTENCE
@@ -312,14 +342,14 @@ function saveData() {
     store.appData.weeks[store.viewingWeekId] = {
         tasks:  Object.assign({}, s.tasks),
         habits: Object.assign({}, s.habits),
-        notes:  Object.assign({}, s.notes),
-        notesCount: _getNotesCount()
     };
+    store.appData.notes      = Object.assign({}, s.notes);
+    store.appData.notesCount = _getNotesCount();
     saveGlobalData();
 }
 
 function loadWeekData() {
-    const wData = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {}, notes: {} };
+    const wData = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {} };
     // Restore all task slots to visible before populating (default: 10 slots shown)
     for (let d = 0; d < 7; d++) {
         for (let t = 0; t < TASKS_PER_DAY; t++) {
@@ -455,6 +485,7 @@ window.onload = () => {
 };
 
 function continueInit() {
+    _migrateWeekNotesToGlobal();
     calculateWeekIds();
     store.viewingWeekId = store.currentRealWeekId;
     if (!store.appData.weeks[store.viewingWeekId]) {
@@ -623,7 +654,7 @@ function initNotesUI() {
     if (!container) return;
     container.innerHTML = '';
     const count  = _getNotesCount();
-    const notes  = (store.appData.weeks[store.viewingWeekId] || {}).notes || {};
+    const notes  = store.appData.notes || {};
     const fragment = document.createDocumentFragment();
     for (let i = 1; i <= count; i++) {
         fragment.appendChild(_createNoteRow(i));
@@ -647,8 +678,7 @@ function addNoteRow() {
     const container = document.getElementById('notes-container');
     const addRow    = container.querySelector('.note-add-row');
     const newIdx    = container.querySelectorAll('.note-row').length + 1;
-    const wData     = store.appData.weeks[store.viewingWeekId] = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {}, notes: {} };
-    wData.notesCount = newIdx;
+    store.appData.notesCount = newIdx;
     container.insertBefore(_createNoteRow(newIdx), addRow);
     container.scrollTop = container.scrollHeight;
     document.getElementById(`note_input_${newIdx}`).focus();
@@ -2111,6 +2141,8 @@ window.loadWeekData = loadWeekData;
 window.calculateWeekIds = calculateWeekIds;
 window.addAbbrRow       = addAbbrRow;
 window.addNoteRow       = addNoteRow;
+window.initNotesUI      = initNotesUI;
+window.migrateWeekNotesToGlobal = _migrateWeekNotesToGlobal;
 window.openNoteModal   = openNoteModal;
 window.closeNoteModal  = closeNoteModal;
 window.openAbbrModal    = openAbbrModal;
