@@ -130,11 +130,21 @@
                 <div class="habit-table" id="habit-container"></div>
 
                 <div class="widget-btn-row">
-                    <button class="nav-btn nav-btn--full" type="button">📝 Notes</button>
+                    <button class="nav-btn nav-btn--full" data-action="open-notes">📝 Notes</button>
                     <button class="nav-btn nav-btn--full" data-action="open-abbr"><span style="color: #A9B4C2; text-shadow: 1px 1px 2px rgba(255,255,255,0.8); font-size: 1.1em;">☁</span> Abbreviations</button>
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <div id="note-modal" class="modal-overlay">
+        <div class="modal-content modal-content--xs">
+            <div class="modal-header">
+                <h2>📝 Notes</h2>
+                <button class="modal-close" data-close="note-modal">×</button>
+            </div>
+            <div id="notes-container"></div>
         </div>
     </div>
 
