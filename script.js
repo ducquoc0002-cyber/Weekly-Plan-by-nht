@@ -228,6 +228,64 @@ function _migrateWeekNotesToGlobal() {
     d.notesCount = Math.max(NOTES_COUNT, merged.length);
 }
 
+// 5b. FLOATING LAYER POSITIONING — keep popups near their trigger and fully visible
+const FLOATING_MARGIN = 8;
+
+function _bodyZoom() { return parseFloat(document.body.style.zoom) || 1; }
+
+/**
+ * Place a fixed-position floating element (context menu, submenu, tooltip) so that it
+ * stays anchored to the trigger point yet never overflows the viewport.
+ * Prefers below the anchor, flips above when there is not enough room, then clamps.
+ * Element must already be measurable (display other than none is set by the caller).
+ * @param {HTMLElement} el
+ * @param {number} clientX pointer/anchor X in client (unzoomed) coordinates
+ * @param {number} clientY pointer/anchor Y in client (unzoomed) coordinates
+ * @param {number} gap vertical distance kept between anchor and element
+ */
+function positionFloatingLayer(el, clientX, clientY, gap = 15) {
+    const zoom = _bodyZoom();
+    const viewW = window.innerWidth / zoom;
+    const viewH = window.innerHeight / zoom;
+    const anchorX = clientX / zoom;
+    const anchorY = clientY / zoom;
+
+    el.style.maxHeight = '';
+    const rect = el.getBoundingClientRect();
+    const w = rect.width / zoom;
+    let h = rect.height / zoom;
+
+    // Taller than the viewport: cap the height and let the element scroll internally
+    const maxH = viewH - FLOATING_MARGIN * 2;
+    if (h > maxH) {
+        el.style.maxHeight = maxH + 'px';
+        el.style.overflowY = 'auto';
+        h = maxH;
+    }
+
+    let top = anchorY + gap;
+    if (top + h > viewH - FLOATING_MARGIN) {
+        const above = anchorY - gap - h;
+        top = above >= FLOATING_MARGIN ? above : viewH - FLOATING_MARGIN - h;
+    }
+    top = Math.max(FLOATING_MARGIN, top);
+
+    let left = anchorX;
+    if (left + w > viewW - FLOATING_MARGIN) left = viewW - FLOATING_MARGIN - w;
+    left = Math.max(FLOATING_MARGIN, left);
+
+    el.style.left = left + 'px';
+    el.style.top  = top + 'px';
+}
+
+/** Show a hidden floating element at an anchor point without a visible measuring flash */
+function showFloatingLayer(el, clientX, clientY, gap = 15) {
+    el.style.visibility = 'hidden';
+    el.style.display = 'block';
+    positionFloatingLayer(el, clientX, clientY, gap);
+    el.style.visibility = '';
+}
+
 // 6. AUTH & DATA PERSISTENCE
 async function checkAuth() {
     try {
@@ -981,6 +1039,9 @@ function handleTimeNavigation(e, dIdx, tIdx, currentIdx) {
     else if (keysLeft.includes(e.key)) { e.preventDefault(); if (currentIdx > 0) focusTimeInput(dIdx, tIdx, currentIdx - 1); }
 }
 
+// Cursor position of the last task right-click; submenus open from the same anchor
+let _menuAnchor = { x: 0, y: 0 };
+
 function showContextMenu(e, dIdx, tIdx) {
     // Show task-action-menu (Mark / Move Task)
     const menu = document.getElementById('task-action-menu');
@@ -994,12 +1055,9 @@ function showContextMenu(e, dIdx, tIdx) {
             toggleItem.innerHTML = '✅ Complete';
         }
     }
-    // Position menu just below the cursor (~0.4 task height offset)
-    // Compensate for body zoom so coordinates map correctly to fixed positioning
-    const zoom = parseFloat(document.body.style.zoom) || 1;
-    menu.style.left = (e.clientX / zoom) + 'px';
-    menu.style.top  = (e.clientY / zoom + 15) + 'px';
-    menu.style.display = 'block';
+    // Anchor the menu to the cursor, flipping/clamping so it is never cut off
+    _menuAnchor = { x: e.clientX, y: e.clientY };
+    showFloatingLayer(menu, _menuAnchor.x, _menuAnchor.y);
     store.setRightClick(dIdx, tIdx);
     // Hide priority-menu if currently visible
     document.getElementById('priority-menu').style.display = 'none';
@@ -1126,8 +1184,29 @@ function showTooltip(e, dayIndex) {
     const s = store.dailyStats[dayIndex];
     t.textContent = `${s.done}/${s.total} tasks completed`;
     t.style.display = 'block';
-    t.style.left = (e.clientX + window.scrollX) + 'px';
-    t.style.top  = (e.clientY + window.scrollY - 15) + 'px';
+    t.classList.remove('flip-below');
+
+    // The tooltip renders above the cursor (translate -50%/-100%); flip it below and
+    // clamp horizontally when the preferred placement would fall outside the viewport
+    const zoom = _bodyZoom();
+    const viewW = window.innerWidth / zoom;
+    const viewH = window.innerHeight / zoom;
+    const rect = t.getBoundingClientRect();
+    const w = rect.width / zoom;
+    const h = rect.height / zoom;
+    const cursorX = e.clientX / zoom;
+    const cursorY = e.clientY / zoom;
+
+    let top = cursorY - 15;
+    if (top - h - 10 < FLOATING_MARGIN) {
+        t.classList.add('flip-below');
+        top = Math.min(cursorY + 15, viewH - FLOATING_MARGIN - h - 10);
+    }
+    const halfW = w / 2;
+    const left = Math.min(Math.max(cursorX, FLOATING_MARGIN + halfW), Math.max(FLOATING_MARGIN + halfW, viewW - FLOATING_MARGIN - halfW));
+
+    t.style.left = left + 'px';
+    t.style.top  = top + 'px';
 }
 function hideTooltip() { document.getElementById('chart-tooltip').style.display = 'none'; }
 
@@ -1760,11 +1839,9 @@ document.addEventListener('mousemove', e => {
         if (!word) { tooltip.style.display = 'none'; return; }
         const entry = abbrMap[word.toLowerCase()];
         if (!entry) { tooltip.style.display = 'none'; return; }
-        const zoom = parseFloat(document.body.style.zoom) || 1;
         tooltip.innerHTML = `<b>${escapeHtml(entry.key)}</b>: ${escapeHtml(entry.val)}`;
         tooltip.style.display = 'block';
-        tooltip.style.left = (e.clientX / zoom) + 'px';
-        tooltip.style.top  = (e.clientY / zoom + 18) + 'px';
+        positionFloatingLayer(tooltip, e.clientX, e.clientY, 18);
     });
 });
 
@@ -2003,12 +2080,8 @@ function handleTaskActionMenuClick(e) {
         if (d === null || t === null) return;
         const cb = document.getElementById(`t_check_${d}_${t}`);
         if (cb) { cb.checked = !cb.checked; _stateSetTask(d, t, 'check', cb.checked); updateDayAndSave(d); }
-    } else if (action === 'show-mark-submenu') {        // Show priority-menu at the same position as task-action-menu
-        const actionMenu = document.getElementById('task-action-menu');
-        const menu = document.getElementById('priority-menu');
-        menu.style.left = actionMenu.style.left;
-        menu.style.top  = actionMenu.style.top;
-        menu.style.display = 'block';
+    } else if (action === 'show-mark-submenu') {        // Show priority-menu from the same anchor as task-action-menu
+        showFloatingLayer(document.getElementById('priority-menu'), _menuAnchor.x, _menuAnchor.y);
     } else if (action === 'show-move-task') {
         const d = store.rightClickDay; const t = store.rightClickTask;
         if (d === null || t === null) return;
