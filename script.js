@@ -130,12 +130,39 @@ function _stateSetTask(d, t, field, value) {
     store.state.tasks[`t_${field}_${d}_${t}`] = value;
 }
 
-/** Capitalize the first letter of an input, preserving cursor position */
-function _capitalizeFirstLetter(el) {
-    if (!el.value || el.value[0] === el.value[0].toUpperCase()) return;
-    const pos = el.selectionStart;
-    el.value = el.value.charAt(0).toUpperCase() + el.value.slice(1);
-    el.setSelectionRange(pos, pos);
+// Fields excluded from auto-capitalization (credentials, numeric time parts)
+const NO_CAPITALIZE_IDS     = ['auth-email', 'auth-password'];
+const NO_CAPITALIZE_CLASSES = ['t-time-part'];
+
+/** True for free-text fields that should be auto-capitalized */
+function _isCapitalizableField(el) {
+    if (!el || el.dataset.noCapitalize !== undefined) return false;
+    if (el.tagName === 'TEXTAREA') return true;
+    if (el.tagName !== 'INPUT') return false;
+    const type = (el.type || 'text').toLowerCase();
+    if (type !== 'text' && type !== 'search') return false;
+    if (NO_CAPITALIZE_IDS.includes(el.id)) return false;
+    return !NO_CAPITALIZE_CLASSES.some(cls => el.classList.contains(cls));
+}
+
+/** Uppercase the first letter of every line, keeping the text length unchanged */
+function _capitalizeLineStarts(value) {
+    return value.replace(/(^|\n)([^\S\n]*)(\p{L})/gu, (match, lineBreak, indent, letter) => {
+        const upper = letter.toLocaleUpperCase();
+        // Skip characters whose uppercase form has a different length (e.g. ß → SS)
+        return upper.length === letter.length ? lineBreak + indent + upper : match;
+    });
+}
+
+/** Capitalize the first letter of each line in a field, preserving cursor position */
+function _autoCapitalize(el) {
+    if (!el.value) return;
+    const next = _capitalizeLineStarts(el.value);
+    if (next === el.value) return;
+    const start = el.selectionStart;
+    const end   = el.selectionEnd;
+    el.value = next;
+    if (start !== null) el.setSelectionRange(start, end);
 }
 
 function _syncStateFromDOM() {
@@ -1649,6 +1676,11 @@ document.addEventListener('mousemove', e => {
 
 // 16. EVENT DELEGATION
 function initEventDelegation() {
+    // Global auto-capitalization: runs in capture phase so handlers that read
+    // the field value (save, resize, tooltips) already see the capitalized text
+    document.addEventListener('input', (e) => {
+        if (_isCapitalizableField(e.target)) _autoCapitalize(e.target);
+    }, true);
     document.addEventListener('click',       handleDocumentClick);
     document.addEventListener('contextmenu', handleDocumentContextMenu);
     document.addEventListener('click', (e) => {
@@ -1668,10 +1700,6 @@ function initEventDelegation() {
     mainGrid.addEventListener('change',      handleMainGridChange);
     mainGrid.addEventListener('click',       handleMainGridClick);
     mainGrid.addEventListener('pointerdown', handleMainGridPointerDown);
-    mainGrid.addEventListener('input', (e) => {
-        if (!e.target.classList.contains('t-name')) return;
-        _capitalizeFirstLetter(e.target);
-    });
     mainGrid.addEventListener('contextmenu', handleMainGridContextMenu);
     mainGrid.addEventListener('dragstart',   handleMainGridDragStart);
     mainGrid.addEventListener('dragover',    handleMainGridDragOver);

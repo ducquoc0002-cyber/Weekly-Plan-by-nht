@@ -35,7 +35,7 @@ script.js (IIFE)
 ├── Renderers      — renderDays, renderHabits, initNotesUI, initAbbrUI, renderCalendar
 ├── Event handlers — initEventDelegation (single delegation root)
 ├── Data layer     — saveData, loadWeekData, saveGlobalData, loadGlobalDataFromDB
-└── Utilities      — date helpers, autoResizeTextarea, _capitalizeFirstLetter
+└── Utilities      — date helpers, autoResizeTextarea, _autoCapitalize
 ```
 
 ### Change Surface
