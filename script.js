@@ -27,13 +27,14 @@ const DAYS_DATA = [
 const DAY_KEYS      = ["M", "T", "W", "T", "F", "S", "S"];
 const TASKS_PER_DAY = 10;
 const HABITS_COUNT  = 5;
+const NOTES_COUNT   = 10;
 const SVG_NS        = 'http://www.w3.org/2000/svg';
 
 // 3. CENTRALIZED STATE STORE
 const store = (() => {
     let _currentUser      = null;
     let _appData          = { weeks: {}, monthly: {}, abbrs: {} };
-        let _state            = { tasks: {}, habits: {} };
+        let _state            = { tasks: {}, habits: {}, notes: {} };
     let _currentRealWeekId = '';
     let _viewingWeekId    = '';
     let _viewingMonthId   = '';
@@ -57,7 +58,7 @@ const store = (() => {
         set appData(v)         { _appData = v; },
         // _state (in-memory DOM mirror)
         get state()            { return _state; },
-        resetState()           { _state = { tasks: {}, habits: {} }; },
+        resetState()           { _state = { tasks: {}, habits: {}, notes: {} }; },
         // week/month IDs
         get currentRealWeekId()     { return _currentRealWeekId; },
         set currentRealWeekId(v)    { _currentRealWeekId = v; },
@@ -186,6 +187,15 @@ function _syncStateFromDOM() {
             s.habits[`h_check_${h}_${d}`] = (document.getElementById(`h_check_${h}_${d}`) || {}).checked || false;
         }
     }
+    for (let i = 1; i <= _getNotesCount(); i++) {
+        s.notes[`note_${i}`] = (document.getElementById(`note_input_${i}`) || {}).value || '';
+    }
+}
+
+/** Number of note rows for the week currently in view */
+function _getNotesCount() {
+    const wData = store.appData.weeks[store.viewingWeekId];
+    return Math.max(NOTES_COUNT, (wData && wData.notesCount) || 0);
 }
 
 // 6. AUTH & DATA PERSISTENCE
@@ -301,13 +311,15 @@ function saveData() {
     const s = store.state;
     store.appData.weeks[store.viewingWeekId] = {
         tasks:  Object.assign({}, s.tasks),
-        habits: Object.assign({}, s.habits)
+        habits: Object.assign({}, s.habits),
+        notes:  Object.assign({}, s.notes),
+        notesCount: _getNotesCount()
     };
     saveGlobalData();
 }
 
 function loadWeekData() {
-    const wData = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {} };
+    const wData = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {}, notes: {} };
     // Restore all task slots to visible before populating (default: 10 slots shown)
     for (let d = 0; d < 7; d++) {
         for (let t = 0; t < TASKS_PER_DAY; t++) {
@@ -338,6 +350,7 @@ function loadWeekData() {
             document.getElementById(`h_check_${h}_${d}`).checked = wData.habits[`h_check_${h}_${d}`] || false;
         }
     }
+    initNotesUI();
     _syncStateFromDOM();
     // Defer task resize until after layout is painted so scrollHeight is accurate
     requestAnimationFrame(() => {
@@ -452,6 +465,7 @@ function continueInit() {
     document.getElementById('greeting-text').innerText = `Hi ${savedName} !!`;
 
     initAbbrUI();
+    initNotesUI();
     renderCalendar();
     renderHabits();
     renderDays();
@@ -591,6 +605,54 @@ function initAbbrUI() {
         document.getElementById(`abbr_k_${i}`).value = store.appData.abbrs?.[`abbr_k_${i}`] || '';
         document.getElementById(`abbr_v_${i}`).value = store.appData.abbrs?.[`abbr_v_${i}`] || '';
     }
+}
+
+function _createNoteRow(i) {
+    const row   = document.createElement('div');
+    row.className = 'note-row';
+    const input = document.createElement('input');
+    input.type  = 'text';
+    input.id    = `note_input_${i}`;
+    input.placeholder = '...';
+    row.appendChild(input);
+    return row;
+}
+
+function initNotesUI() {
+    const container = document.getElementById('notes-container');
+    if (!container) return;
+    container.innerHTML = '';
+    const count  = _getNotesCount();
+    const notes  = (store.appData.weeks[store.viewingWeekId] || {}).notes || {};
+    const fragment = document.createDocumentFragment();
+    for (let i = 1; i <= count; i++) {
+        fragment.appendChild(_createNoteRow(i));
+    }
+    const addRow = document.createElement('div');
+    addRow.className = 'note-add-row';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'note-add-btn';
+    addBtn.textContent = '+';
+    addBtn.title = 'Add note';
+    addBtn.addEventListener('click', addNoteRow);
+    addRow.appendChild(addBtn);
+    fragment.appendChild(addRow);
+    container.appendChild(fragment);
+    for (let i = 1; i <= count; i++) {
+        document.getElementById(`note_input_${i}`).value = notes[`note_${i}`] || '';
+    }
+}
+
+function addNoteRow() {
+    const container = document.getElementById('notes-container');
+    const addRow    = container.querySelector('.note-add-row');
+    const newIdx    = container.querySelectorAll('.note-row').length + 1;
+    const wData     = store.appData.weeks[store.viewingWeekId] = store.appData.weeks[store.viewingWeekId] || { tasks: {}, habits: {}, notes: {} };
+    wData.notesCount = newIdx;
+    container.insertBefore(_createNoteRow(newIdx), addRow);
+    container.scrollTop = container.scrollHeight;
+    document.getElementById(`note_input_${newIdx}`).focus();
+    saveData();
 }
 
 function addAbbrRow() {
@@ -1360,6 +1422,8 @@ function _executeMoveTask(targetWeekId, targetDayIdx) {
 }
 
 // 14. MODAL LOGIC
+function openNoteModal()   { store.openModal(); document.getElementById('note-modal').style.display = 'flex'; }
+function closeNoteModal()  { store.closeModal(); document.getElementById('note-modal').style.display = 'none'; }
 function openAbbrModal()    { store.openModal(); document.getElementById('abbr-modal').style.display = 'flex'; }
 function closeAbbrModal()   { store.closeModal(); document.getElementById('abbr-modal').style.display = 'none'; }
 function openSettingsModal()  { store.openModal(); document.getElementById('settings-modal').style.display = 'flex'; }
@@ -1694,6 +1758,7 @@ function initEventDelegation() {
     // Task action menu (Mark / Move Task)
     document.getElementById('task-action-menu').addEventListener('click', handleTaskActionMenuClick);
     document.addEventListener('change', handleAbbrChange);
+    document.addEventListener('input',  handleNotesInput);
     document.addEventListener('change', handleMonthlyModalChange);
 
     const mainGrid = document.getElementById('main-grid');
@@ -1894,6 +1959,7 @@ function handleTopNavClick(e) {
     if (a === 'open-monthly')           openMonthlyModal();
     else if (a === 'open-month-picker') openMonthPickerModal();
     else if (a === 'logout')            handleLogout();
+    else if (a === 'open-notes')        openNoteModal();
     else if (a === 'open-abbr')         openAbbrModal();
     else if (a === 'open-settings')     openSettingsModal();
 }
@@ -1929,7 +1995,8 @@ function handleModalCloseClick(e) {
     const btn = e.target.closest('[data-close]');
     if (!btn) return;
     const id = btn.dataset.close;
-    if (id === 'abbr-modal')         closeAbbrModal();
+    if (id === 'note-modal')        closeNoteModal();
+    else if (id === 'abbr-modal')         closeAbbrModal();
     else if (id === 'monthly-modal')      closeMonthlyModal();
     else if (id === 'month-picker-modal') closeMonthPickerModal();
     else if (id === 'settings-modal')     closeSettingsModal();
@@ -2019,6 +2086,10 @@ function handleAbbrChange(e) {
     if (!e.target.id || (!e.target.id.startsWith('abbr_k_') && !e.target.id.startsWith('abbr_v_'))) return;
     saveAbbrData();
 }
+function handleNotesInput(e) {
+    if (!e.target.id || !e.target.id.startsWith('note_input_')) return;
+    scheduler.save();
+}
 function handleMonthlyModalChange(e) {
     const modal = document.getElementById('monthly-modal');
     if (!modal || !modal.contains(e.target)) return;
@@ -2039,6 +2110,9 @@ window.saveData     = saveData;
 window.loadWeekData = loadWeekData;
 window.calculateWeekIds = calculateWeekIds;
 window.addAbbrRow       = addAbbrRow;
+window.addNoteRow       = addNoteRow;
+window.openNoteModal   = openNoteModal;
+window.closeNoteModal  = closeNoteModal;
 window.openAbbrModal    = openAbbrModal;
 window.closeAbbrModal   = closeAbbrModal;
 window.openMonthlyModal    = openMonthlyModal;
